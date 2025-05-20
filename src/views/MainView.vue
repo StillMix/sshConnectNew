@@ -17,13 +17,32 @@
         <p>Зажмите <kbd>Ctrl</kbd> для добавления подключения</p>
       </div>
 
+      <!-- Уведомление о трансфере файлов -->
+      <div class="file-transfer-notification" v-if="fileTransferNotification.isVisible">
+        <div class="notification-content">
+          <div class="notification-icon">📤</div>
+          <div class="notification-message">
+            <p class="notification-title">{{ fileTransferNotification.title }}</p>
+            <p class="notification-description">{{ fileTransferNotification.description }}</p>
+          </div>
+        </div>
+        <div class="notification-progress">
+          <div
+            class="progress-bar"
+            :style="{ width: fileTransferNotification.progress + '%' }"
+          ></div>
+        </div>
+      </div>
+
       <div class="connections-grid">
         <div v-for="connection in connections" :key="connection.id" class="connection-wrapper">
           <transition name="fade" mode="out-in">
             <ServerInfo
               v-if="connection.isConnected && connection.showServerInfo"
               :server="connection.server"
+              :serverId="connection.id.toString()"
               @disconnect="() => handleDisconnect(connection.id)"
+              @file-transfer="handleFileTransfer"
             />
             <SshConnect
               v-else
@@ -41,7 +60,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, reactive } from 'vue'
 import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
 import SSHconnectings from '@/components/SSHconnectings.vue'
@@ -63,9 +82,25 @@ interface Connection {
   showServerInfo: boolean
 }
 
+// Интерфейс для трансфера файлов
+interface FileTransfer {
+  fileName: string
+  isFolder: boolean
+  sourceServerId: string
+  destinationServerId: string
+}
+
 // Состояние подключений
 const connections = ref<Connection[]>([])
 const activeConnectionId = ref<number | null>(null)
+
+// Состояние уведомления о трансфере файлов
+const fileTransferNotification = reactive({
+  isVisible: false,
+  title: '',
+  description: '',
+  progress: 0,
+})
 
 // Анимация при загрузке страницы
 onMounted(() => {
@@ -116,6 +151,50 @@ const handleAddConnection = (connectionData: { id: number; position: number }) =
       isConnected: false,
       showServerInfo: false,
     })
+  }
+}
+
+// Обработчик трансфера файлов между серверами
+const handleFileTransfer = (transferData: FileTransfer) => {
+  console.log('Передача файла между серверами:', transferData)
+
+  // Получаем информацию о серверах
+  const sourceConnection = connections.value.find(
+    (c) => c.id.toString() === transferData.sourceServerId,
+  )
+  const destinationConnection = connections.value.find(
+    (c) => c.id.toString() === transferData.destinationServerId,
+  )
+
+  if (
+    sourceConnection &&
+    destinationConnection &&
+    sourceConnection.server &&
+    destinationConnection.server
+  ) {
+    // Показываем уведомление о начале передачи
+    fileTransferNotification.isVisible = true
+    fileTransferNotification.title = `Передача файла: ${transferData.fileName}`
+    fileTransferNotification.description = `с ${sourceConnection.server.title} на ${destinationConnection.server.title}`
+    fileTransferNotification.progress = 0
+
+    // Имитируем процесс передачи файла
+    const totalSteps = 10
+    let currentStep = 0
+
+    const transferInterval = setInterval(() => {
+      currentStep++
+      fileTransferNotification.progress = (currentStep / totalSteps) * 100
+
+      if (currentStep >= totalSteps) {
+        clearInterval(transferInterval)
+
+        // После завершения передачи оставляем уведомление на короткое время
+        setTimeout(() => {
+          fileTransferNotification.isVisible = false
+        }, 2000)
+      }
+    }, 300)
   }
 }
 </script>

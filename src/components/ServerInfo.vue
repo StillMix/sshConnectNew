@@ -2,21 +2,25 @@
 import TextEdit from './TextEdit.vue'
 import RightClickMenu from './RightCLickMenu.vue'
 import ServerFile from './ServerFile.vue'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 
-defineProps<{
+const props = defineProps<{
   server?: {
     title: string
     user: string
     password: string
   } | null
+  serverId: string // Уникальный ID сервера
 }>()
 
-const emit = defineEmits(['disconnect'])
+const emit = defineEmits(['disconnect', 'fileTransfer'])
 
 const handleDisconnect = () => {
   emit('disconnect')
 }
+
+// Состояние для перетаскивания
+const isDragOver = ref(false)
 
 // Состояние для текстового редактора
 const textEditorState = ref({
@@ -32,6 +36,14 @@ const contextMenu = ref({
   y: 0,
   fileName: '',
   isFolder: false,
+})
+
+// Состояние для отображения индикатора перетаскивания
+const transferIndicator = ref({
+  isVisible: false,
+  fileName: '',
+  sourceServerId: '',
+  destinationServerId: '',
 })
 
 // Открывает текстовый редактор для файла
@@ -104,6 +116,83 @@ const fileSystem = [
   { fileName: 'config.json', isFolder: false },
   { fileName: 'app.log', isFolder: false },
 ]
+
+// Обработчики drag and drop
+const handleDragOver = (event: DragEvent) => {
+  // Предотвращаем стандартное поведение браузера
+  event.preventDefault()
+
+  // Устанавливаем эффект копирования
+  if (event.dataTransfer) {
+    event.dataTransfer.dropEffect = 'copy'
+  }
+
+  // Устанавливаем флаг, что файл находится над зоной приема
+  isDragOver.value = true
+}
+
+const handleDragLeave = () => {
+  // Снимаем флаг, когда файл покидает зону приема
+  isDragOver.value = false
+}
+
+const handleDrop = (event: DragEvent) => {
+  // Предотвращаем стандартное поведение браузера
+  event.preventDefault()
+
+  // Снимаем флаг
+  isDragOver.value = false
+
+  // Проверяем, что у нас есть данные
+  if (event.dataTransfer) {
+    try {
+      // Получаем данные о перетаскиваемом файле
+      const transferData = JSON.parse(event.dataTransfer.getData('text/plain'))
+
+      // Проверяем, что это не перетаскивание на тот же сервер
+      if (transferData.serverId !== props.serverId) {
+        console.log('Файл перетащен с одного сервера на другой:', transferData)
+
+        // Показываем индикатор перетаскивания
+        transferIndicator.value = {
+          isVisible: true,
+          fileName: transferData.fileName,
+          sourceServerId: transferData.serverId,
+          destinationServerId: props.serverId,
+        }
+
+        // Имитируем процесс передачи (в реальности это будет запрос к серверу)
+        setTimeout(() => {
+          // Передаем информацию о передаче файлов в родительский компонент
+          emit('fileTransfer', {
+            fileName: transferData.fileName,
+            isFolder: transferData.isFolder,
+            sourceServerId: transferData.serverId,
+            destinationServerId: props.serverId,
+          })
+
+          // Скрываем индикатор после завершения передачи
+          transferIndicator.value.isVisible = false
+        }, 2000)
+      }
+    } catch (error) {
+      console.error('Ошибка при обработке перетаскиваемых данных:', error)
+    }
+  }
+}
+
+// Начало перетаскивания файла
+const handleFileDragStart = (fileData: any) => {
+  console.log('Начало перетаскивания файла:', fileData)
+}
+
+// Вычисляемое свойство для класса file-explorer
+const fileExplorerClass = computed(() => {
+  return {
+    'file-explorer': true,
+    'drag-over': isDragOver.value,
+  }
+})
 </script>
 
 <template>
@@ -136,15 +225,30 @@ const fileSystem = [
         </div>
       </div>
 
-      <div class="file-explorer">
+      <div
+        :class="fileExplorerClass"
+        @dragover="handleDragOver"
+        @dragleave="handleDragLeave"
+        @drop="handleDrop"
+      >
         <ServerFile
           v-for="file in fileSystem"
           :key="file.fileName"
           :fileName="file.fileName"
           :isFolder="file.isFolder"
+          :serverId="serverId"
           @context-menu="showContextMenu"
           @double-click="handleFileDoubleClick"
+          @drag-start="handleFileDragStart"
         />
+
+        <!-- Индикатор перетаскивания -->
+        <div class="transfer-indicator" v-if="transferIndicator.isVisible">
+          <div class="indicator-content">
+            <div class="spinner"></div>
+            <p>Передача: {{ transferIndicator.fileName }}</p>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -324,12 +428,58 @@ const fileSystem = [
   }
 
   .file-explorer {
+    position: relative;
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
     gap: 16px;
     padding: 16px;
     background-color: #1e293b;
     border-radius: 12px;
+    transition: all 0.3s ease;
+
+    &.drag-over {
+      background-color: #2d3a4f;
+      box-shadow: 0 0 0 2px #3b82f6;
+      transform: scale(1.01);
+    }
+  }
+}
+
+.transfer-indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(15, 23, 42, 0.8);
+  border-radius: 12px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  animation: fadeIn 0.3s ease;
+
+  .indicator-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+
+    p {
+      color: #f1f5f9;
+      font-size: 16px;
+      font-weight: 500;
+      margin: 0;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(59, 130, 246, 0.3);
+      border-radius: 50%;
+      border-top-color: #3b82f6;
+      animation: spin 1s linear infinite;
+    }
   }
 }
 
@@ -341,6 +491,12 @@ const fileSystem = [
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
   }
 }
 </style>

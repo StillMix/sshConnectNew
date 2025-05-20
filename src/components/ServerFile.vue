@@ -2,9 +2,10 @@
 const props = defineProps<{
   fileName: string
   isFolder?: boolean
+  serverId?: string // ID сервера, к которому относится файл
 }>()
 
-const emit = defineEmits(['contextMenu', 'doubleClick'])
+const emit = defineEmits(['contextMenu', 'doubleClick', 'dragStart'])
 
 const handleContextMenu = (event: MouseEvent) => {
   emit('contextMenu', event, props.fileName, props.isFolder)
@@ -15,6 +16,30 @@ const handleDoubleClick = () => {
     emit('doubleClick', props.fileName)
   }
 }
+
+const handleDragStart = (event: DragEvent) => {
+  if (event.dataTransfer) {
+    // Сохраняем информацию о перетаскиваемом файле
+    event.dataTransfer.setData(
+      'text/plain',
+      JSON.stringify({
+        fileName: props.fileName,
+        isFolder: props.isFolder,
+        serverId: props.serverId,
+      }),
+    )
+
+    // Устанавливаем эффект копирования
+    event.dataTransfer.effectAllowed = 'copyMove'
+
+    // Информируем родительский компонент о начале перетаскивания
+    emit('dragStart', {
+      fileName: props.fileName,
+      isFolder: props.isFolder,
+      serverId: props.serverId,
+    })
+  }
+}
 </script>
 
 <template>
@@ -23,6 +48,8 @@ const handleDoubleClick = () => {
     :class="{ folder: isFolder, file: !isFolder }"
     @contextmenu="handleContextMenu"
     @dblclick="handleDoubleClick"
+    draggable="true"
+    @dragstart="handleDragStart"
   >
     <span class="file-icon">{{ isFolder ? '📁' : '📄' }}</span>
     <span class="file-name">{{ fileName }}</span>
@@ -44,6 +71,10 @@ const handleDoubleClick = () => {
   &:hover {
     background-color: #334155;
     transform: translateY(-4px);
+  }
+
+  &:active {
+    cursor: grabbing;
   }
 
   .file-icon {
