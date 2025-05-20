@@ -19,18 +19,29 @@
 
       <!-- Уведомление о трансфере файлов -->
       <div class="file-transfer-notification" v-if="fileTransferNotification.isVisible">
+        <div class="notification-backdrop"></div>
         <div class="notification-content">
-          <div class="notification-icon">📤</div>
-          <div class="notification-message">
+          <div class="notification-icon">
+            <div class="icon-wrapper">
+              <div class="circle-animation"></div>
+              <span class="transfer-icon">📤</span>
+            </div>
+          </div>
+          <div class="notification-info">
             <p class="notification-title">{{ fileTransferNotification.title }}</p>
             <p class="notification-description">{{ fileTransferNotification.description }}</p>
+            <div class="notification-progress-wrapper">
+              <div class="notification-progress">
+                <div
+                  class="progress-bar"
+                  :style="{ width: fileTransferNotification.progress + '%' }"
+                ></div>
+              </div>
+              <span class="progress-percentage"
+                >{{ Math.round(fileTransferNotification.progress) }}%</span
+              >
+            </div>
           </div>
-        </div>
-        <div class="notification-progress">
-          <div
-            class="progress-bar"
-            :style="{ width: fileTransferNotification.progress + '%' }"
-          ></div>
         </div>
       </div>
 
@@ -392,5 +403,194 @@ body {
 
 .ssh-container {
   animation-delay: 0.2s;
+}
+
+.file-transfer-notification {
+  position: fixed;
+  top: 30px;
+  right: 30px;
+  z-index: 1100;
+  width: 400px;
+  max-width: 95vw;
+  animation:
+    slideInRight 0.4s ease-out forwards,
+    elevate 0.3s ease-out 0.4s forwards;
+}
+
+.notification-backdrop {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.9), rgba(30, 64, 175, 0.92));
+  border-radius: 16px;
+  box-shadow: 0 12px 30px rgba(0, 10, 32, 0.35);
+  opacity: 0.9;
+  backdrop-filter: blur(10px);
+  transform: scale(0.98);
+  transition: transform 0.3s ease;
+  z-index: -1;
+  overflow: hidden;
+
+  &:before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, rgba(255, 255, 255, 0.15), transparent 60%);
+    opacity: 0.6;
+    pointer-events: none;
+  }
+}
+
+.notification-content {
+  display: flex;
+  padding: 20px;
+  align-items: center;
+  gap: 16px;
+}
+
+.notification-icon {
+  flex-shrink: 0;
+
+  .icon-wrapper {
+    position: relative;
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .circle-animation {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    border-top-color: rgba(255, 255, 255, 1);
+    animation: spin 1.5s linear infinite;
+  }
+
+  .transfer-icon {
+    font-size: 24px;
+    filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.5));
+  }
+}
+
+.notification-info {
+  flex: 1;
+  overflow: hidden;
+}
+
+.notification-title {
+  color: white;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-description {
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 14px;
+  margin: 0 0 12px 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notification-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.notification-progress {
+  flex: 1;
+  height: 6px;
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.progress-bar {
+  height: 100%;
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.7));
+  border-radius: 10px;
+  transition: width 0.3s ease;
+  box-shadow: 0 0 6px rgba(255, 255, 255, 0.6);
+  position: relative;
+  overflow: hidden;
+
+  &:after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: shimmer 1.5s infinite;
+  }
+}
+
+.progress-percentage {
+  color: white;
+  font-size: 14px;
+  font-weight: 600;
+  min-width: 36px;
+  text-align: right;
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes elevate {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-5px);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (max-width: 768px) {
+  .file-transfer-notification {
+    right: 10px;
+    left: 10px;
+    width: calc(100% - 20px);
+    max-width: 100%;
+  }
 }
 </style>
