@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
+import SSHconnectings from '@/components/SSHconnectings.vue'
 import { onMounted, ref } from 'vue'
 
 // Интерфейс для сервера
@@ -58,6 +59,7 @@ const handleDisconnect = () => {
     </div>
 
     <div class="content-wrapper">
+      <SSHconnectings />
       <transition name="fade" mode="out-in">
         <ServerInfo
           v-if="isConnected && showServerInfo"

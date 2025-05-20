@@ -1,18 +1,98 @@
 <script setup lang="ts">
 import TextEdit from './TextEdit.vue'
+import RightClickMenu from './RightCLickMenu.vue'
+import { ref } from 'vue'
 
 defineProps<{
   server?: {
     title: string
     user: string
     password: string
-  }
+  } | null
 }>()
 
 const emit = defineEmits(['disconnect'])
 
 const handleDisconnect = () => {
   emit('disconnect')
+}
+
+// Состояние для текстового редактора
+const textEditorState = ref({
+  isOpen: false,
+  fileName: '',
+  content: '',
+})
+
+// Состояние для контекстного меню
+const contextMenu = ref({
+  isVisible: false,
+  x: 0,
+  y: 0,
+  fileName: '',
+  isFolder: false,
+})
+
+// Открывает текстовый редактор для файла
+const openTextEditor = (fileName: string, content: string = '') => {
+  textEditorState.value = {
+    isOpen: true,
+    fileName,
+    content,
+  }
+}
+
+// Обработчик сохранения файла
+const handleSaveFile = (fileData: { fileName: string; content: string }) => {
+  console.log('Сохранение файла:', fileData)
+  // Здесь будет логика сохранения файла
+  // в реальном приложении это будет отправка запроса на сервер
+}
+
+// Закрытие текстового редактора
+const closeTextEditor = () => {
+  textEditorState.value.isOpen = false
+}
+
+// Открывает контекстное меню
+const showContextMenu = (event: MouseEvent, fileName: string, isFolder: boolean = false) => {
+  event.preventDefault()
+  contextMenu.value = {
+    isVisible: true,
+    x: event.clientX,
+    y: event.clientY,
+    fileName,
+    isFolder,
+  }
+}
+
+// Закрывает контекстное меню
+const closeContextMenu = () => {
+  contextMenu.value.isVisible = false
+}
+
+// Обработчики для контекстного меню
+const handleRename = () => {
+  console.log('Переименование:', contextMenu.value.fileName)
+  // Здесь будет логика переименования
+  closeContextMenu()
+}
+
+const handleDelete = () => {
+  console.log('Удаление:', contextMenu.value.fileName)
+  // Здесь будет логика удаления
+  closeContextMenu()
+}
+
+// Обработка двойного клика на файле
+const handleFileDoubleClick = (fileName: string) => {
+  // Проверяем, что это текстовый файл (в реальном приложении нужно более точное определение)
+  if (!fileName.includes('.')) return
+
+  // Симулируем загрузку содержимого файла
+  // В реальном приложении это будет запрос на сервер
+  const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
+  openTextEditor(fileName, fileContent)
 }
 </script>
 
@@ -47,29 +127,58 @@ const handleDisconnect = () => {
       </div>
 
       <div class="file-explorer">
-        <div class="file-item folder">
+        <div class="file-item folder" @contextmenu="showContextMenu($event, 'home', true)">
           <span class="file-icon">📁</span>
           <span class="file-name">home</span>
         </div>
-        <div class="file-item folder">
+        <div class="file-item folder" @contextmenu="showContextMenu($event, 'var', true)">
           <span class="file-icon">📁</span>
           <span class="file-name">var</span>
         </div>
-        <div class="file-item folder">
+        <div class="file-item folder" @contextmenu="showContextMenu($event, 'etc', true)">
           <span class="file-icon">📁</span>
           <span class="file-name">etc</span>
         </div>
-        <div class="file-item file">
+        <div
+          class="file-item file"
+          @dblclick="handleFileDoubleClick('config.json')"
+          @contextmenu="showContextMenu($event, 'config.json')"
+        >
           <span class="file-icon">📄</span>
           <span class="file-name">config.json</span>
         </div>
-        <div class="file-item file">
+        <div
+          class="file-item file"
+          @dblclick="handleFileDoubleClick('app.log')"
+          @contextmenu="showContextMenu($event, 'app.log')"
+        >
           <span class="file-icon">📄</span>
           <span class="file-name">app.log</span>
         </div>
       </div>
     </div>
-    <TextEdit />
+
+    <!-- Текстовый редактор -->
+    <TextEdit
+      v-if="textEditorState.isOpen"
+      :fileName="textEditorState.fileName"
+      :content="textEditorState.content"
+      :isOpen="textEditorState.isOpen"
+      @save="handleSaveFile"
+      @close="closeTextEditor"
+    />
+
+    <!-- Контекстное меню -->
+    <RightClickMenu
+      v-if="contextMenu.isVisible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      :fileName="contextMenu.fileName"
+      :isFolder="contextMenu.isFolder"
+      @rename="handleRename"
+      @delete="handleDelete"
+      @close="closeContextMenu"
+    />
   </div>
 </template>
 
@@ -241,6 +350,7 @@ const handleDisconnect = () => {
       border-radius: 8px;
       cursor: pointer;
       transition: all 0.2s ease;
+      user-select: none;
 
       &:hover {
         background-color: #334155;
@@ -260,6 +370,13 @@ const handleDisconnect = () => {
 
       &.folder .file-name {
         color: #60a5fa;
+      }
+
+      &.file {
+        &:active {
+          transform: scale(0.98);
+          background-color: #475569;
+        }
       }
     }
   }
