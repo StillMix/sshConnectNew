@@ -1,3 +1,45 @@
+<template>
+  <div class="main">
+    <div class="app-header">
+      <div class="logo">
+        <span class="logo-icon">⚡</span>
+        <h1>SSH Connect</h1>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle">🌙</button>
+      </div>
+    </div>
+
+    <div class="content-wrapper">
+      <SSHconnectings @add-connection="handleAddConnection" />
+
+      <div v-if="connections.length === 0" class="no-connections">
+        <p>Зажмите <kbd>Ctrl</kbd> для добавления подключения</p>
+      </div>
+
+      <div class="connections-grid">
+        <div v-for="connection in connections" :key="connection.id" class="connection-wrapper">
+          <transition name="fade" mode="out-in">
+            <ServerInfo
+              v-if="connection.isConnected && connection.showServerInfo"
+              :server="connection.server"
+              @disconnect="() => handleDisconnect(connection.id)"
+            />
+            <SshConnect
+              v-else
+              @server-select="(server) => handleServerSelect(connection.id, server)"
+            />
+          </transition>
+        </div>
+      </div>
+    </div>
+
+    <div class="app-footer">
+      <p>© 2025 SSH Connect. Все права защищены.</p>
+    </div>
+  </div>
+</template>
+
 <script setup lang="ts">
 import { ref } from 'vue'
 import ServerInfo from '@/components/ServerInfo.vue'
@@ -77,46 +119,6 @@ const handleAddConnection = (connectionData: { id: number; position: number }) =
   }
 }
 </script>
-
-<template>
-  <div class="main">
-    <div class="app-header">
-      <div class="logo">
-        <span class="logo-icon">⚡</span>
-        <h1>SSH Connect</h1>
-      </div>
-      <div class="header-actions">
-        <button class="theme-toggle">🌙</button>
-      </div>
-    </div>
-
-    <div class="content-wrapper">
-      <SSHconnectings @add-connection="handleAddConnection" />
-
-      <div v-if="connections.length === 0" class="no-connections">
-        <p>Зажмите <kbd>Ctrl</kbd> для добавления подключения</p>
-      </div>
-
-      <div v-for="connection in connections" :key="connection.id" class="connection-wrapper">
-        <transition name="fade" mode="out-in">
-          <ServerInfo
-            v-if="connection.isConnected && connection.showServerInfo"
-            :server="connection.server"
-            @disconnect="() => handleDisconnect(connection.id)"
-          />
-          <SshConnect
-            v-else
-            @server-select="(server) => handleServerSelect(connection.id, server)"
-          />
-        </transition>
-      </div>
-    </div>
-
-    <div class="app-footer">
-      <p>© 2025 SSH Connect. Все права защищены.</p>
-    </div>
-  </div>
-</template>
 
 <style lang="scss">
 * {
@@ -215,9 +217,22 @@ body {
   flex: 1;
   padding: 20px 0;
   width: 100%;
-  max-width: 900px;
+  max-width: 1200px;
   margin: 0 auto;
   position: relative;
+}
+
+.connections-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.connection-wrapper {
+  flex: 1;
+  min-width: 300px;
+  max-width: calc(50% - 10px);
 }
 
 .no-connections {
@@ -275,6 +290,10 @@ body {
     .header-actions {
       align-self: flex-end;
     }
+  }
+
+  .connection-wrapper {
+    max-width: 100%;
   }
 }
 
