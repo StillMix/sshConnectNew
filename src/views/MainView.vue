@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
 import { onMounted } from 'vue'
 
@@ -25,6 +26,7 @@ onMounted(() => {
 
     <div class="content-wrapper">
       <SshConnect />
+      <ServerInfo />
     </div>
 
     <div class="app-footer">
