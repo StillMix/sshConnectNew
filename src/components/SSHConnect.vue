@@ -46,7 +46,12 @@ const connect = () => {
 }
 
 const handleServerSelect = (server: ServerCredential) => {
+  connectionState.value = 'success'
   emit('server-select', server)
+}
+
+const startConnecting = () => {
+  connectionState.value = 'loading'
 }
 </script>
 
@@ -57,7 +62,7 @@ const handleServerSelect = (server: ServerCredential) => {
       <p class="status-message">{{ connectionMessages[connectionState] }}</p>
     </div>
 
-    <SSHContainer @server-select="handleServerSelect" />
+    <SSHContainer @server-select="handleServerSelect" @connecting="startConnecting" />
 
     <div class="connection-panel">
       <div class="panel-header">

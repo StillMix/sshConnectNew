@@ -14,6 +14,7 @@ interface ServerCredential {
 // Состояние подключения
 const isConnected = ref(false)
 const selectedServer = ref<ServerCredential | null>(null)
+const showServerInfo = ref(false)
 
 // Анимация при загрузке страницы
 onMounted(() => {
@@ -26,11 +27,21 @@ onMounted(() => {
 const handleServerSelect = (server: ServerCredential) => {
   selectedServer.value = server
   isConnected.value = true
+
+  // Небольшая задержка перед показом ServerInfo, чтобы анимация fade работала корректно
+  setTimeout(() => {
+    showServerInfo.value = true
+  }, 100)
 }
 
 const handleDisconnect = () => {
-  isConnected.value = false
-  selectedServer.value = null
+  showServerInfo.value = false
+
+  // Задержка перед сбросом состояния подключения для плавного перехода
+  setTimeout(() => {
+    isConnected.value = false
+    selectedServer.value = null
+  }, 500) // Это должно совпадать со временем анимации fade
 }
 </script>
 
@@ -47,11 +58,13 @@ const handleDisconnect = () => {
     </div>
 
     <div class="content-wrapper">
-      <transition name="fade">
-        <SshConnect v-if="!isConnected" @server-select="handleServerSelect" />
-      </transition>
-      <transition name="fade">
-        <ServerInfo v-if="isConnected" :server="selectedServer" @disconnect="handleDisconnect" />
+      <transition name="fade" mode="out-in">
+        <ServerInfo
+          v-if="isConnected && showServerInfo"
+          :server="selectedServer"
+          @disconnect="handleDisconnect"
+        />
+        <SshConnect v-else @server-select="handleServerSelect" />
       </transition>
     </div>
 

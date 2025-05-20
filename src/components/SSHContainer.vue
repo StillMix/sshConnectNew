@@ -21,7 +21,7 @@ const newCredential = reactive({
   password: '',
 })
 
-const emit = defineEmits(['server-select'])
+const emit = defineEmits(['server-select', 'connecting'])
 
 const toggleForm = () => {
   showForm.value = !showForm.value
@@ -45,6 +45,9 @@ const addCredential = () => {
 }
 
 const selectCredential = (credential: SSHCredential) => {
+  // Сообщаем родителю, что начали подключение
+  emit('connecting')
+
   // Имитация подключения
   setTimeout(() => {
     // Передаем данные наверх через событие
