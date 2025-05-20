@@ -1,7 +1,19 @@
 <script setup lang="ts">
 import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
-import { onMounted } from 'vue'
+import { onMounted, ref } from 'vue'
+
+// Интерфейс для сервера
+interface ServerCredential {
+  id?: number
+  title: string
+  user: string
+  password: string
+}
+
+// Состояние подключения
+const isConnected = ref(false)
+const selectedServer = ref<ServerCredential | null>(null)
 
 // Анимация при загрузке страницы
 onMounted(() => {
@@ -10,6 +22,16 @@ onMounted(() => {
     main.classList.add('loaded')
   }
 })
+
+const handleServerSelect = (server: ServerCredential) => {
+  selectedServer.value = server
+  isConnected.value = true
+}
+
+const handleDisconnect = () => {
+  isConnected.value = false
+  selectedServer.value = null
+}
 </script>
 
 <template>
@@ -25,8 +47,12 @@ onMounted(() => {
     </div>
 
     <div class="content-wrapper">
-      <SshConnect />
-      <ServerInfo />
+      <transition name="fade">
+        <SshConnect v-if="!isConnected" @server-select="handleServerSelect" />
+      </transition>
+      <transition name="fade">
+        <ServerInfo v-if="isConnected" :server="selectedServer" @disconnect="handleDisconnect" />
+      </transition>
     </div>
 
     <div class="app-footer">
@@ -134,6 +160,7 @@ body {
   width: 100%;
   max-width: 900px;
   margin: 0 auto;
+  position: relative;
 }
 
 .app-footer {
@@ -146,6 +173,19 @@ body {
     color: #94a3b8;
     font-size: 14px;
   }
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition:
+    opacity 0.5s ease,
+    transform 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(30px);
 }
 
 @media (max-width: 768px) {

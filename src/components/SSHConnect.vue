@@ -2,6 +2,13 @@
 import { ref, reactive } from 'vue'
 import SSHContainer from './SSHContainer.vue'
 
+interface ServerCredential {
+  id?: number
+  title: string
+  user: string
+  password: string
+}
+
 const connectionState = ref<'none' | 'loading' | 'success' | 'error'>('none')
 const connectionMessages = reactive({
   none: 'Ожидание подключения',
@@ -15,6 +22,8 @@ const credentials = reactive({
   password: '',
 })
 
+const emit = defineEmits(['server-select'])
+
 const connect = () => {
   if (!credentials.user || !credentials.password) return
 
@@ -22,9 +31,22 @@ const connect = () => {
 
   // Имитация подключения
   setTimeout(() => {
-    // Случайный успех или ошибка для демонстрации
-    connectionState.value = Math.random() > 0.5 ? 'success' : 'error'
+    // Успех для демонстрации
+    connectionState.value = 'success'
+
+    // После успешного подключения передаем данные наверх
+    setTimeout(() => {
+      emit('server-select', {
+        title: 'Быстрое подключение',
+        user: credentials.user,
+        password: credentials.password,
+      })
+    }, 1000)
   }, 2000)
+}
+
+const handleServerSelect = (server: ServerCredential) => {
+  emit('server-select', server)
 }
 </script>
 
@@ -35,7 +57,7 @@ const connect = () => {
       <p class="status-message">{{ connectionMessages[connectionState] }}</p>
     </div>
 
-    <SSHContainer />
+    <SSHContainer @server-select="handleServerSelect" />
 
     <div class="connection-panel">
       <div class="panel-header">

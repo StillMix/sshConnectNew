@@ -21,6 +21,8 @@ const newCredential = reactive({
   password: '',
 })
 
+const emit = defineEmits(['server-select'])
+
 const toggleForm = () => {
   showForm.value = !showForm.value
 }
@@ -43,8 +45,11 @@ const addCredential = () => {
 }
 
 const selectCredential = (credential: SSHCredential) => {
-  console.log('Выбран сервер:', credential.title)
-  // Здесь можно добавить логику для эмита наверх
+  // Имитация подключения
+  setTimeout(() => {
+    // Передаем данные наверх через событие
+    emit('server-select', credential)
+  }, 1000)
 }
 </script>
 
