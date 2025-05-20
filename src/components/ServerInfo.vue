@@ -13,6 +13,11 @@ const props = defineProps<{
   serverId: string
 }>()
 
+interface FileDragData {
+  fileName: string
+  isFolder: boolean
+  serverId: string
+}
 const emit = defineEmits(['disconnect', 'fileTransfer'])
 
 const handleDisconnect = () => {
@@ -54,7 +59,10 @@ const fileSystem = ref([
   { fileName: 'config.json', isFolder: false },
   { fileName: 'app.log', isFolder: false },
 ])
-
+const deleteConfirmMessage = computed(() => {
+  const fileType = deleteDialogState.value.isFolder ? 'папку' : 'файл'
+  return `Вы уверены, что хотите удалить ${fileType} "${deleteDialogState.value.fileName}"?`
+})
 // Открывает текстовый редактор для файла
 const openTextEditor = (fileName: string, content: string = '') => {
   textEditorState.value = {
@@ -219,7 +227,7 @@ const handleDrop = (event: DragEvent) => {
 }
 
 // Начало перетаскивания файла
-const handleFileDragStart = (fileData: any) => {
+const handleFileDragStart = (fileData: FileDragData) => {
   console.log('Начало перетаскивания файла:', fileData)
 }
 
@@ -288,7 +296,7 @@ const fileExplorerClass = computed(() => {
       </div>
     </div>
 
-<!-- Текстовый редактор -->
+    <!-- Текстовый редактор -->
     <TextEdit
       v-if="textEditorState.isOpen"
       :fileName="textEditorState.fileName"
@@ -309,7 +317,7 @@ const fileExplorerClass = computed(() => {
       @delete="handleDelete"
       @close="closeContextMenu"
     />
-    
+
     <!-- Диалог переименования -->
     <RenameDialog
       :isVisible="renameDialogState.isVisible"
@@ -318,12 +326,12 @@ const fileExplorerClass = computed(() => {
       @confirm="confirmRename"
       @cancel="cancelRename"
     />
-    
+
     <!-- Диалог подтверждения удаления -->
     <ConfirmDialog
       :isVisible="deleteDialogState.isVisible"
       :title="'Удаление ' + (deleteDialogState.isFolder ? 'папки' : 'файла')"
-      :message="'Вы уверены, что хотите удалить ' + (deleteDialogState.isFolder ? 'папку' : 'файл') + ' \"' + deleteDialogState.fileName + '\"?'"
+      :message="deleteConfirmMessage"
       :confirmText="'Удалить'"
       :isDelete="true"
       @confirm="confirmDelete"
