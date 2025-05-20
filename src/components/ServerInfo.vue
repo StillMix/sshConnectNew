@@ -104,16 +104,19 @@ const closeTextEditor = () => {
 
 // Открывает контекстное меню
 const showContextMenu = (event: MouseEvent, fileName: string, isFolder: boolean = false) => {
+  // Добавляем проверку, чтобы контекстное меню появлялось только для файлов
   event.preventDefault()
-  contextMenu.value = {
-    isVisible: true,
-    x: event.clientX,
-    y: event.clientY,
-    fileName,
-    isFolder,
+  // Проверяем, что это событие вызвано из ServerFile компонента
+  if (event.target && (event.target as HTMLElement).closest('.file-item')) {
+    contextMenu.value = {
+      isVisible: true,
+      x: event.clientX,
+      y: event.clientY,
+      fileName,
+      isFolder,
+    }
   }
 }
-
 // Закрывает контекстное меню
 const closeContextMenu = () => {
   contextMenu.value.isVisible = false

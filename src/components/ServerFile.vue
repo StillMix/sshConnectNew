@@ -8,6 +8,8 @@ const props = defineProps<{
 const emit = defineEmits(['contextMenu', 'doubleClick', 'dragStart'])
 
 const handleContextMenu = (event: MouseEvent) => {
+  event.preventDefault()
+  event.stopPropagation() // Добавляем остановку всплытия события
   emit('contextMenu', event, props.fileName, props.isFolder)
 }
 

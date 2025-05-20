@@ -13,6 +13,7 @@ const handleSelect = () => {
 
 const handleContextMenu = (event: MouseEvent) => {
   event.preventDefault()
+  event.stopPropagation() // Останавливаем всплытие
   emit('context-menu', event)
 }
 </script>

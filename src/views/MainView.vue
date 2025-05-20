@@ -75,7 +75,7 @@ import { ref, reactive } from 'vue'
 import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
 import SSHconnectings from '@/components/SSHconnectings.vue'
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 
 // Интерфейс для сервера
 interface ServerCredential {
@@ -119,6 +119,22 @@ onMounted(() => {
   if (main) {
     main.classList.add('loaded')
   }
+
+  // Добавляем обработчик для предотвращения стандартного контекстного меню
+  document.addEventListener('contextmenu', (e) => {
+    // Проверяем, что клик не произошел на элементе, который должен иметь контекстное меню
+    const isMenuElement =
+      (e.target as HTMLElement).closest('.ssh-card') ||
+      (e.target as HTMLElement).closest('.file-item')
+    if (!isMenuElement) {
+      e.preventDefault()
+    }
+  })
+})
+
+// Не забываем удалить обработчик при размонтировании компонента
+onUnmounted(() => {
+  document.removeEventListener('contextmenu', handleContextMenu)
 })
 
 // Обработчик выбора сервера для определенного подключения

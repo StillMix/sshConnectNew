@@ -74,6 +74,7 @@ const selectCredential = (credential: SSHCredential) => {
 // Показать контекстное меню для сервера
 const showContextMenu = (event: MouseEvent, serverId: number) => {
   event.preventDefault()
+  event.stopPropagation() // Останавливаем всплытие события
   contextMenu.value = {
     isVisible: true,
     x: event.clientX,
