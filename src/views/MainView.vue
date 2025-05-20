@@ -223,16 +223,14 @@ body {
 }
 
 .connections-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 20px;
   margin-top: 20px;
 }
 
 .connection-wrapper {
-  flex: 1;
-  min-width: 300px;
-  max-width: calc(50% - 10px);
+  width: 100%;
 }
 
 .no-connections {
@@ -292,8 +290,8 @@ body {
     }
   }
 
-  .connection-wrapper {
-    max-width: 100%;
+  .connections-grid {
+    grid-template-columns: 1fr;
   }
 }
 
