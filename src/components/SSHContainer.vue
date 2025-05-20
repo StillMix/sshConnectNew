@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import SSHCard from './SSHCard.vue'
+import RightClickMenu from './RightCLickMenu.vue'
 
 interface SSHCredential {
   id: number
@@ -19,6 +20,21 @@ const newCredential = reactive({
   title: '',
   user: '',
   password: '',
+})
+
+// Состояние для контекстного меню
+const contextMenu = ref({
+  isVisible: false,
+  x: 0,
+  y: 0,
+  serverId: 0,
+})
+
+// Состояние для формы переименования
+const renameState = ref({
+  isVisible: false,
+  serverId: 0,
+  newTitle: '',
 })
 
 const emit = defineEmits(['server-select', 'connecting'])
@@ -54,8 +70,62 @@ const selectCredential = (credential: SSHCredential) => {
     emit('server-select', credential)
   }, 1000)
 }
-</script>
 
+// Показать контекстное меню для сервера
+const showContextMenu = (event: MouseEvent, serverId: number) => {
+  event.preventDefault()
+  contextMenu.value = {
+    isVisible: true,
+    x: event.clientX,
+    y: event.clientY,
+    serverId: serverId,
+  }
+}
+
+// Закрыть контекстное меню
+const closeContextMenu = () => {
+  contextMenu.value.isVisible = false
+}
+
+// Обработчик удаления сервера
+const handleDelete = () => {
+  const index = credentials.findIndex((cred) => cred.id === contextMenu.value.serverId)
+  if (index !== -1) {
+    credentials.splice(index, 1)
+  }
+  closeContextMenu()
+}
+
+// Показать форму переименования
+const handleRename = () => {
+  const server = credentials.find((cred) => cred.id === contextMenu.value.serverId)
+  if (server) {
+    renameState.value = {
+      isVisible: true,
+      serverId: server.id,
+      newTitle: server.title,
+    }
+  }
+  closeContextMenu()
+}
+
+// Применить переименование
+const applyRename = () => {
+  if (renameState.value.newTitle.trim() === '') return
+
+  const server = credentials.find((cred) => cred.id === renameState.value.serverId)
+  if (server) {
+    server.title = renameState.value.newTitle
+  }
+
+  renameState.value.isVisible = false
+}
+
+// Отмена переименования
+const cancelRename = () => {
+  renameState.value.isVisible = false
+}
+</script>
 <template>
   <div class="ssh-container">
     <div class="container-header">
@@ -89,6 +159,20 @@ const selectCredential = (credential: SSHCredential) => {
       </form>
     </transition>
 
+    <!-- Форма переименования -->
+    <transition name="slide-fade">
+      <form v-if="renameState.isVisible" class="add-form rename-form" @submit.prevent="applyRename">
+        <div class="form-group">
+          <label>Переименовать сервер</label>
+          <input type="text" v-model="renameState.newTitle" placeholder="Новое название" required />
+        </div>
+        <div class="form-actions">
+          <button type="button" class="cancel-button" @click="cancelRename">Отмена</button>
+          <button type="submit" class="submit-button">Сохранить</button>
+        </div>
+      </form>
+    </transition>
+
     <transition-group name="list" tag="div" class="cards">
       <SSHCard
         v-for="credential in credentials"
@@ -97,8 +181,19 @@ const selectCredential = (credential: SSHCredential) => {
         :user="credential.user"
         :password="credential.password"
         @select="selectCredential(credential)"
+        @context-menu="(event) => showContextMenu(event, credential.id)"
       />
     </transition-group>
+
+    <!-- Контекстное меню -->
+    <RightClickMenu
+      v-if="contextMenu.isVisible"
+      :x="contextMenu.x"
+      :y="contextMenu.y"
+      @rename="handleRename"
+      @delete="handleDelete"
+      @close="closeContextMenu"
+    />
   </div>
 </template>
 
@@ -156,12 +251,25 @@ const selectCredential = (credential: SSHCredential) => {
   }
 }
 
-.add-form {
+.add-form,
+.rename-form {
   background-color: #1e293b;
   border-radius: 12px;
   padding: 20px;
   margin-bottom: 24px;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.rename-form {
+  border-left: 3px solid #3b82f6;
+
+  label {
+    display: block;
+    color: #94a3b8;
+    font-size: 14px;
+    margin-bottom: 8px;
+    font-weight: 500;
+  }
 }
 
 .form-group {

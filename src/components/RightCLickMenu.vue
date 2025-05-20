@@ -56,7 +56,6 @@ onUnmounted(() => {
     </button>
   </div>
 </template>
-
 <style lang="scss" scoped>
 .right-click-menu {
   position: fixed;

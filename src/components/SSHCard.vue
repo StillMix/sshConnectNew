@@ -5,15 +5,20 @@ defineProps<{
   password: string
 }>()
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['select', 'context-menu'])
 
 const handleSelect = () => {
   emit('select')
 }
+
+const handleContextMenu = (event: MouseEvent) => {
+  event.preventDefault()
+  emit('context-menu', event)
+}
 </script>
 
 <template>
-  <button class="ssh-card" @click="handleSelect">
+  <button class="ssh-card" @click="handleSelect" @contextmenu="handleContextMenu">
     <div class="card-content">
       <div class="card-header">
         <div class="title">{{ title }}</div>
