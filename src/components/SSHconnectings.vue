@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
-import SshConnect from './SSHConnect.vue'
 
 // Массив активных подключений
 const connections = ref<{ id: number; position: number; active: boolean }[]>([])
@@ -93,17 +92,6 @@ onUnmounted(() => {
       </div>
     </div>
   </div>
-
-  <div class="active-connections">
-    <div
-      v-for="connection in connections"
-      :key="connection.id"
-      class="connection-container"
-      :class="`position-${connection.position}`"
-    >
-      <SshConnect @server-select="() => {}" />
-    </div>
-  </div>
 </template>
 
 <style lang="scss" scoped>
@@ -167,48 +155,6 @@ onUnmounted(() => {
   color: #3b82f6;
   font-weight: 300;
   transition: all 0.3s ease;
-}
-
-.active-connections {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-
-.connection-container {
-  position: absolute;
-  width: 50%;
-  height: 50%;
-  transition: all 0.5s ease;
-
-  // Для одного подключения (центральная позиция)
-  &:only-child {
-    width: 100%;
-    height: 100%;
-    left: 0;
-    top: 0;
-  }
-
-  // Позиционирование для разных слотов
-  &.position-0 {
-    left: 0;
-    top: 0;
-  }
-
-  &.position-1 {
-    left: 50%;
-    top: 0;
-  }
-
-  &.position-2 {
-    left: 0;
-    top: 50%;
-  }
-
-  &.position-3 {
-    left: 50%;
-    top: 50%;
-  }
 }
 
 @keyframes fadeIn {
