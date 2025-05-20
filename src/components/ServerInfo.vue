@@ -288,7 +288,7 @@ const fileExplorerClass = computed(() => {
       </div>
     </div>
 
-    <!-- Текстовый редактор -->
+<!-- Текстовый редактор -->
     <TextEdit
       v-if="textEditorState.isOpen"
       :fileName="textEditorState.fileName"
@@ -308,6 +308,26 @@ const fileExplorerClass = computed(() => {
       @rename="handleRename"
       @delete="handleDelete"
       @close="closeContextMenu"
+    />
+    
+    <!-- Диалог переименования -->
+    <RenameDialog
+      :isVisible="renameDialogState.isVisible"
+      :fileName="renameDialogState.fileName"
+      :isFolder="renameDialogState.isFolder"
+      @confirm="confirmRename"
+      @cancel="cancelRename"
+    />
+    
+    <!-- Диалог подтверждения удаления -->
+    <ConfirmDialog
+      :isVisible="deleteDialogState.isVisible"
+      :title="'Удаление ' + (deleteDialogState.isFolder ? 'папки' : 'файла')"
+      :message="'Вы уверены, что хотите удалить ' + (deleteDialogState.isFolder ? 'папку' : 'файл') + ' \"' + deleteDialogState.fileName + '\"?'"
+      :confirmText="'Удалить'"
+      :isDelete="true"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
     />
   </div>
 </template>
