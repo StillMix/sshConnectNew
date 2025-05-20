@@ -10,7 +10,7 @@ const props = defineProps<{
     user: string
     password: string
   } | null
-  serverId: string // Уникальный ID сервера
+  serverId: string
 }>()
 
 const emit = defineEmits(['disconnect', 'fileTransfer'])
@@ -45,6 +45,15 @@ const transferIndicator = ref({
   sourceServerId: '',
   destinationServerId: '',
 })
+
+// Данные о файловой системе
+const fileSystem = ref([
+  { fileName: 'home', isFolder: true },
+  { fileName: 'var', isFolder: true },
+  { fileName: 'etc', isFolder: true },
+  { fileName: 'config.json', isFolder: false },
+  { fileName: 'app.log', isFolder: false },
+])
 
 // Открывает текстовый редактор для файла
 const openTextEditor = (fileName: string, content: string = '') => {
@@ -87,13 +96,44 @@ const closeContextMenu = () => {
 // Обработчики для контекстного меню
 const handleRename = () => {
   console.log('Переименование:', contextMenu.value.fileName)
-  // Здесь будет логика переименования
+
+  // Запрашиваем новое имя
+  const newFileName = prompt('Введите новое имя', contextMenu.value.fileName)
+
+  // Проверяем, что пользователь не отменил действие и имя не пустое
+  if (newFileName && newFileName.trim() !== '') {
+    // Находим индекс файла в массиве
+    const fileIndex = fileSystem.value.findIndex(
+      (file) => file.fileName === contextMenu.value.fileName,
+    )
+
+    // Если файл найден, меняем его имя
+    if (fileIndex !== -1) {
+      fileSystem.value[fileIndex].fileName = newFileName.trim()
+    }
+  }
+
   closeContextMenu()
 }
 
 const handleDelete = () => {
   console.log('Удаление:', contextMenu.value.fileName)
-  // Здесь будет логика удаления
+
+  // Запрашиваем подтверждение удаления
+  const confirmDelete = confirm(`Вы уверены, что хотите удалить "${contextMenu.value.fileName}"?`)
+
+  if (confirmDelete) {
+    // Находим индекс файла в массиве
+    const fileIndex = fileSystem.value.findIndex(
+      (file) => file.fileName === contextMenu.value.fileName,
+    )
+
+    // Если файл найден, удаляем его
+    if (fileIndex !== -1) {
+      fileSystem.value.splice(fileIndex, 1)
+    }
+  }
+
   closeContextMenu()
 }
 
@@ -107,15 +147,6 @@ const handleFileDoubleClick = (fileName: string) => {
   const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
   openTextEditor(fileName, fileContent)
 }
-
-// Данные о файловой системе
-const fileSystem = [
-  { fileName: 'home', isFolder: true },
-  { fileName: 'var', isFolder: true },
-  { fileName: 'etc', isFolder: true },
-  { fileName: 'config.json', isFolder: false },
-  { fileName: 'app.log', isFolder: false },
-]
 
 // Обработчики drag and drop
 const handleDragOver = (event: DragEvent) => {
@@ -173,6 +204,12 @@ const handleDrop = (event: DragEvent) => {
 
           // Скрываем индикатор после завершения передачи
           transferIndicator.value.isVisible = false
+
+          // Добавляем файл в текущую файловую систему
+          fileSystem.value.push({
+            fileName: transferData.fileName,
+            isFolder: transferData.isFolder,
+          })
         }, 2000)
       }
     } catch (error) {
@@ -194,7 +231,6 @@ const fileExplorerClass = computed(() => {
   }
 })
 </script>
-
 <template>
   <div class="serverinfo">
     <div class="server-header">
