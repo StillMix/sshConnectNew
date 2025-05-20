@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import TextEdit from './TextEdit.vue'
 import RightClickMenu from './RightCLickMenu.vue'
+import ServerFile from './ServerFile.vue'
 import { ref } from 'vue'
 
 defineProps<{
@@ -94,6 +95,15 @@ const handleFileDoubleClick = (fileName: string) => {
   const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
   openTextEditor(fileName, fileContent)
 }
+
+// Данные о файловой системе
+const fileSystem = [
+  { fileName: 'home', isFolder: true },
+  { fileName: 'var', isFolder: true },
+  { fileName: 'etc', isFolder: true },
+  { fileName: 'config.json', isFolder: false },
+  { fileName: 'app.log', isFolder: false },
+]
 </script>
 
 <template>
@@ -127,34 +137,14 @@ const handleFileDoubleClick = (fileName: string) => {
       </div>
 
       <div class="file-explorer">
-        <div class="file-item folder" @contextmenu="showContextMenu($event, 'home', true)">
-          <span class="file-icon">📁</span>
-          <span class="file-name">home</span>
-        </div>
-        <div class="file-item folder" @contextmenu="showContextMenu($event, 'var', true)">
-          <span class="file-icon">📁</span>
-          <span class="file-name">var</span>
-        </div>
-        <div class="file-item folder" @contextmenu="showContextMenu($event, 'etc', true)">
-          <span class="file-icon">📁</span>
-          <span class="file-name">etc</span>
-        </div>
-        <div
-          class="file-item file"
-          @dblclick="handleFileDoubleClick('config.json')"
-          @contextmenu="showContextMenu($event, 'config.json')"
-        >
-          <span class="file-icon">📄</span>
-          <span class="file-name">config.json</span>
-        </div>
-        <div
-          class="file-item file"
-          @dblclick="handleFileDoubleClick('app.log')"
-          @contextmenu="showContextMenu($event, 'app.log')"
-        >
-          <span class="file-icon">📄</span>
-          <span class="file-name">app.log</span>
-        </div>
+        <ServerFile
+          v-for="file in fileSystem"
+          :key="file.fileName"
+          :fileName="file.fileName"
+          :isFolder="file.isFolder"
+          @context-menu="showContextMenu"
+          @double-click="handleFileDoubleClick"
+        />
       </div>
     </div>
 
@@ -340,45 +330,6 @@ const handleFileDoubleClick = (fileName: string) => {
     padding: 16px;
     background-color: #1e293b;
     border-radius: 12px;
-
-    .file-item {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 8px;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      transition: all 0.2s ease;
-      user-select: none;
-
-      &:hover {
-        background-color: #334155;
-        transform: translateY(-4px);
-      }
-
-      .file-icon {
-        font-size: 24px;
-      }
-
-      .file-name {
-        color: #e2e8f0;
-        font-size: 14px;
-        text-align: center;
-        word-break: break-word;
-      }
-
-      &.folder .file-name {
-        color: #60a5fa;
-      }
-
-      &.file {
-        &:active {
-          transform: scale(0.98);
-          background-color: #475569;
-        }
-      }
-    }
   }
 }
 
