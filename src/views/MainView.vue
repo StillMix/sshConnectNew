@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import ServerInfo from '@/components/ServerInfo.vue'
 import SshConnect from '@/components/SSHConnect.vue'
 import SSHconnectings from '@/components/SSHconnectings.vue'
-import { onMounted, ref } from 'vue'
+import { onMounted } from 'vue'
 
 // Интерфейс для сервера
 interface ServerCredential {
@@ -12,10 +13,17 @@ interface ServerCredential {
   password: string
 }
 
-// Состояние подключения
-const isConnected = ref(false)
-const selectedServer = ref<ServerCredential | null>(null)
-const showServerInfo = ref(false)
+// Интерфейс для подключения
+interface Connection {
+  id: number
+  server: ServerCredential | null
+  isConnected: boolean
+  showServerInfo: boolean
+}
+
+// Состояние подключений
+const connections = ref<Connection[]>([])
+const activeConnectionId = ref<number | null>(null)
 
 // Анимация при загрузке страницы
 onMounted(() => {
@@ -25,24 +33,48 @@ onMounted(() => {
   }
 })
 
-const handleServerSelect = (server: ServerCredential) => {
-  selectedServer.value = server
-  isConnected.value = true
+// Обработчик выбора сервера для определенного подключения
+const handleServerSelect = (connectionId: number, server: ServerCredential) => {
+  const connection = connections.value.find((c) => c.id === connectionId)
+  if (connection) {
+    connection.server = server
+    connection.isConnected = true
 
-  // Небольшая задержка перед показом ServerInfo, чтобы анимация fade работала корректно
-  setTimeout(() => {
-    showServerInfo.value = true
-  }, 100)
+    // Небольшая задержка перед показом ServerInfo
+    setTimeout(() => {
+      connection.showServerInfo = true
+    }, 100)
+  }
+
+  // Устанавливаем активное подключение
+  activeConnectionId.value = connectionId
 }
 
-const handleDisconnect = () => {
-  showServerInfo.value = false
+// Обработчик отключения от сервера
+const handleDisconnect = (connectionId: number) => {
+  const connection = connections.value.find((c) => c.id === connectionId)
+  if (connection) {
+    connection.showServerInfo = false
 
-  // Задержка перед сбросом состояния подключения для плавного перехода
-  setTimeout(() => {
-    isConnected.value = false
-    selectedServer.value = null
-  }, 500) // Это должно совпадать со временем анимации fade
+    // Задержка перед сбросом состояния подключения
+    setTimeout(() => {
+      connection.isConnected = false
+      connection.server = null
+    }, 500)
+  }
+}
+
+// Обработчик добавления нового подключения
+const handleAddConnection = (connectionData: { id: number; position: number }) => {
+  // Проверяем, что такого подключения еще нет
+  if (!connections.value.some((c) => c.id === connectionData.id)) {
+    connections.value.push({
+      id: connectionData.id,
+      server: null,
+      isConnected: false,
+      showServerInfo: false,
+    })
+  }
 }
 </script>
 
@@ -59,15 +91,25 @@ const handleDisconnect = () => {
     </div>
 
     <div class="content-wrapper">
-      <SSHconnectings />
-      <transition name="fade" mode="out-in">
-        <ServerInfo
-          v-if="isConnected && showServerInfo"
-          :server="selectedServer"
-          @disconnect="handleDisconnect"
-        />
-        <SshConnect v-else @server-select="handleServerSelect" />
-      </transition>
+      <SSHconnectings @add-connection="handleAddConnection" />
+
+      <div v-if="connections.length === 0" class="no-connections">
+        <p>Зажмите <kbd>Ctrl</kbd> для добавления подключения</p>
+      </div>
+
+      <div v-for="connection in connections" :key="connection.id" class="connection-wrapper">
+        <transition name="fade" mode="out-in">
+          <ServerInfo
+            v-if="connection.isConnected && connection.showServerInfo"
+            :server="connection.server"
+            @disconnect="() => handleDisconnect(connection.id)"
+          />
+          <SshConnect
+            v-else
+            @server-select="(server) => handleServerSelect(connection.id, server)"
+          />
+        </transition>
+      </div>
     </div>
 
     <div class="app-footer">
@@ -176,6 +218,27 @@ body {
   max-width: 900px;
   margin: 0 auto;
   position: relative;
+}
+
+.no-connections {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 300px;
+
+  p {
+    color: #94a3b8;
+    font-size: 18px;
+    text-align: center;
+
+    kbd {
+      background-color: #334155;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #f8fafc;
+    }
+  }
 }
 
 .app-footer {
