@@ -2,6 +2,8 @@
 import TextEdit from './TextEdit.vue'
 import RightClickMenu from './RightCLickMenu.vue'
 import ServerFile from './ServerFile.vue'
+import RenameDialog from './RenameDialog.vue'
+import ConfirmDialog from './ConfirmDialog.vue'
 import { ref, computed } from 'vue'
 
 const props = defineProps<{
@@ -19,6 +21,20 @@ interface FileDragData {
   serverId: string
 }
 const emit = defineEmits(['disconnect', 'fileTransfer'])
+
+// Состояние для диалога переименования
+const renameDialogState = ref({
+  isVisible: false,
+  fileName: '',
+  isFolder: false,
+})
+
+// Состояние для диалога подтверждения удаления
+const deleteDialogState = ref({
+  isVisible: false,
+  fileName: '',
+  isFolder: false,
+})
 
 const handleDisconnect = () => {
   emit('disconnect')
@@ -59,10 +75,12 @@ const fileSystem = ref([
   { fileName: 'config.json', isFolder: false },
   { fileName: 'app.log', isFolder: false },
 ])
+
 const deleteConfirmMessage = computed(() => {
   const fileType = deleteDialogState.value.isFolder ? 'папку' : 'файл'
   return `Вы уверены, что хотите удалить ${fileType} "${deleteDialogState.value.fileName}"?`
 })
+
 // Открывает текстовый редактор для файла
 const openTextEditor = (fileName: string, content: string = '') => {
   textEditorState.value = {
@@ -103,46 +121,59 @@ const closeContextMenu = () => {
 
 // Обработчики для контекстного меню
 const handleRename = () => {
-  console.log('Переименование:', contextMenu.value.fileName)
+  // Показываем диалог переименования вместо prompt
+  renameDialogState.value = {
+    isVisible: true,
+    fileName: contextMenu.value.fileName,
+    isFolder: contextMenu.value.isFolder,
+  }
+  closeContextMenu()
+}
 
-  // Запрашиваем новое имя
-  const newFileName = prompt('Введите новое имя', contextMenu.value.fileName)
+const handleDelete = () => {
+  // Показываем диалог подтверждения удаления вместо confirm
+  deleteDialogState.value = {
+    isVisible: true,
+    fileName: contextMenu.value.fileName,
+    isFolder: contextMenu.value.isFolder,
+  }
+  closeContextMenu()
+}
 
-  // Проверяем, что пользователь не отменил действие и имя не пустое
+// Функции для работы с диалогом переименования
+const confirmRename = (newFileName: string) => {
   if (newFileName && newFileName.trim() !== '') {
-    // Находим индекс файла в массиве
     const fileIndex = fileSystem.value.findIndex(
-      (file) => file.fileName === contextMenu.value.fileName,
+      (file) => file.fileName === renameDialogState.value.fileName,
     )
 
-    // Если файл найден, меняем его имя
     if (fileIndex !== -1) {
       fileSystem.value[fileIndex].fileName = newFileName.trim()
     }
   }
 
-  closeContextMenu()
+  renameDialogState.value.isVisible = false
 }
 
-const handleDelete = () => {
-  console.log('Удаление:', contextMenu.value.fileName)
+const cancelRename = () => {
+  renameDialogState.value.isVisible = false
+}
 
-  // Запрашиваем подтверждение удаления
-  const confirmDelete = confirm(`Вы уверены, что хотите удалить "${contextMenu.value.fileName}"?`)
+// Функции для работы с диалогом подтверждения удаления
+const confirmDelete = () => {
+  const fileIndex = fileSystem.value.findIndex(
+    (file) => file.fileName === deleteDialogState.value.fileName,
+  )
 
-  if (confirmDelete) {
-    // Находим индекс файла в массиве
-    const fileIndex = fileSystem.value.findIndex(
-      (file) => file.fileName === contextMenu.value.fileName,
-    )
-
-    // Если файл найден, удаляем его
-    if (fileIndex !== -1) {
-      fileSystem.value.splice(fileIndex, 1)
-    }
+  if (fileIndex !== -1) {
+    fileSystem.value.splice(fileIndex, 1)
   }
 
-  closeContextMenu()
+  deleteDialogState.value.isVisible = false
+}
+
+const cancelDelete = () => {
+  deleteDialogState.value.isVisible = false
 }
 
 // Обработка двойного клика на файле
