@@ -1,10 +1,11 @@
 <script setup lang="ts">
+import { ref, onMounted, computed } from 'vue'
 import TextEdit from './TextEdit.vue'
 import RightClickMenu from './RightCLickMenu.vue'
 import ServerFile from './ServerFile.vue'
 import RenameDialog from './RenameDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
-import { ref, computed } from 'vue'
+import { invoke } from '@tauri-apps/api/core'
 
 const props = defineProps<{
   server?: {
@@ -20,6 +21,13 @@ interface FileDragData {
   isFolder: boolean
   serverId: string
 }
+
+interface FileData {
+  fileName: string
+  isFolder: boolean
+  path: string
+}
+
 const emit = defineEmits(['disconnect', 'fileTransfer'])
 
 // Состояние для диалога переименования
@@ -68,17 +76,83 @@ const transferIndicator = ref({
 })
 
 // Данные о файловой системе
-const fileSystem = ref([
-  { fileName: 'home', isFolder: true },
-  { fileName: 'var', isFolder: true },
-  { fileName: 'etc', isFolder: true },
-  { fileName: 'config.json', isFolder: false },
-  { fileName: 'app.log', isFolder: false },
-])
+const fileSystem = ref<FileData[]>([])
+const currentPath = ref('/')
+const isLoading = ref(false)
+
+// Загрузка содержимого директории
+const loadDirectory = async (path = '/') => {
+  if (!props.server) return
+
+  isLoading.value = true
+
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    const files = await invoke('list_directory', {
+      connectionInfo: {
+        username: username,
+        host: props.server.user,
+        password: props.server.password,
+      },
+      path: path,
+    })
+
+    // Преобразуем результат
+    fileSystem.value = Array.isArray(files)
+      ? files.map((file) => ({
+          fileName: file.name,
+          isFolder: file.is_folder,
+          path: file.path,
+        }))
+      : []
+
+    currentPath.value = path
+  } catch (error) {
+    console.error('Ошибка при загрузке директории:', error)
+    fileSystem.value = [] // Очищаем при ошибке
+  } finally {
+    isLoading.value = false
+  }
+}
+
+// Обработка клика на папку
+const handleFolderClick = (fileName: string) => {
+  const file = fileSystem.value.find((f) => f.fileName === fileName)
+  if (file && file.isFolder) {
+    loadDirectory(file.path)
+  }
+}
+
+// Навигация по пути
+const pathParts = computed(() => {
+  const parts = currentPath.value.split('/').filter(Boolean)
+  return ['/', ...parts]
+})
+
+const navigateTo = (index: number) => {
+  if (index === 0) {
+    loadDirectory('/')
+    return
+  }
+
+  const parts = pathParts.value.slice(1, index + 1)
+  const path = '/' + parts.join('/')
+  loadDirectory(path)
+}
 
 const deleteConfirmMessage = computed(() => {
   const fileType = deleteDialogState.value.isFolder ? 'папку' : 'файл'
   return `Вы уверены, что хотите удалить ${fileType} "${deleteDialogState.value.fileName}"?`
+})
+
+// Загрузка директории при монтировании компонента
+onMounted(() => {
+  if (props.server) {
+    loadDirectory('/')
+  }
 })
 
 // Открывает текстовый редактор для файла
@@ -94,7 +168,6 @@ const openTextEditor = (fileName: string, content: string = '') => {
 const handleSaveFile = (fileData: { fileName: string; content: string }) => {
   console.log('Сохранение файла:', fileData)
   // Здесь будет логика сохранения файла
-  // в реальном приложении это будет отправка запроса на сервер
 }
 
 // Закрытие текстового редактора
@@ -104,9 +177,7 @@ const closeTextEditor = () => {
 
 // Открывает контекстное меню
 const showContextMenu = (event: MouseEvent, fileName: string, isFolder: boolean = false) => {
-  // Добавляем проверку, чтобы контекстное меню появлялось только для файлов
   event.preventDefault()
-  // Проверяем, что это событие вызвано из ServerFile компонента
   if (event.target && (event.target as HTMLElement).closest('.file-item')) {
     contextMenu.value = {
       isVisible: true,
@@ -124,7 +195,6 @@ const closeContextMenu = () => {
 
 // Обработчики для контекстного меню
 const handleRename = () => {
-  // Показываем диалог переименования вместо prompt
   renameDialogState.value = {
     isVisible: true,
     fileName: contextMenu.value.fileName,
@@ -134,7 +204,6 @@ const handleRename = () => {
 }
 
 const handleDelete = () => {
-  // Показываем диалог подтверждения удаления вместо confirm
   deleteDialogState.value = {
     isVisible: true,
     fileName: contextMenu.value.fileName,
@@ -181,52 +250,44 @@ const cancelDelete = () => {
 
 // Обработка двойного клика на файле
 const handleFileDoubleClick = (fileName: string) => {
-  // Проверяем, что это текстовый файл (в реальном приложении нужно более точное определение)
-  if (!fileName.includes('.')) return
+  const file = fileSystem.value.find((f) => f.fileName === fileName)
 
-  // Симулируем загрузку содержимого файла
-  // В реальном приложении это будет запрос на сервер
+  if (!file) return
+
+  if (file.isFolder) {
+    handleFolderClick(fileName)
+    return
+  }
+
+  // Для файлов открываем текстовый редактор
   const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
   openTextEditor(fileName, fileContent)
 }
 
 // Обработчики drag and drop
 const handleDragOver = (event: DragEvent) => {
-  // Предотвращаем стандартное поведение браузера
   event.preventDefault()
-
-  // Устанавливаем эффект копирования
   if (event.dataTransfer) {
     event.dataTransfer.dropEffect = 'copy'
   }
-
-  // Устанавливаем флаг, что файл находится над зоной приема
   isDragOver.value = true
 }
 
 const handleDragLeave = () => {
-  // Снимаем флаг, когда файл покидает зону приема
   isDragOver.value = false
 }
 
 const handleDrop = (event: DragEvent) => {
-  // Предотвращаем стандартное поведение браузера
   event.preventDefault()
-
-  // Снимаем флаг
   isDragOver.value = false
 
-  // Проверяем, что у нас есть данные
   if (event.dataTransfer) {
     try {
-      // Получаем данные о перетаскиваемом файле
       const transferData = JSON.parse(event.dataTransfer.getData('text/plain'))
 
-      // Проверяем, что это не перетаскивание на тот же сервер
       if (transferData.serverId !== props.serverId) {
         console.log('Файл перетащен с одного сервера на другой:', transferData)
 
-        // Показываем индикатор перетаскивания
         transferIndicator.value = {
           isVisible: true,
           fileName: transferData.fileName,
@@ -234,9 +295,7 @@ const handleDrop = (event: DragEvent) => {
           destinationServerId: props.serverId,
         }
 
-        // Имитируем процесс передачи (в реальности это будет запрос к серверу)
         setTimeout(() => {
-          // Передаем информацию о передаче файлов в родительский компонент
           emit('fileTransfer', {
             fileName: transferData.fileName,
             isFolder: transferData.isFolder,
@@ -244,13 +303,15 @@ const handleDrop = (event: DragEvent) => {
             destinationServerId: props.serverId,
           })
 
-          // Скрываем индикатор после завершения передачи
           transferIndicator.value.isVisible = false
 
-          // Добавляем файл в текущую файловую систему
           fileSystem.value.push({
             fileName: transferData.fileName,
             isFolder: transferData.isFolder,
+            path:
+              currentPath.value +
+              (currentPath.value.endsWith('/') ? '' : '/') +
+              transferData.fileName,
           })
         }, 2000)
       }
@@ -270,6 +331,7 @@ const fileExplorerClass = computed(() => {
   return {
     'file-explorer': true,
     'drag-over': isDragOver.value,
+    'is-loading': isLoading.value,
   }
 })
 </script>
@@ -297,9 +359,16 @@ const fileExplorerClass = computed(() => {
       <div class="content-header">
         <h3>Файловая система</h3>
         <div class="path-navigation">
-          <span class="path-item active">/</span>
-          <span class="path-separator">/</span>
-          <span class="path-item">home</span>
+          <span
+            v-for="(part, index) in pathParts"
+            :key="index"
+            class="path-item"
+            :class="{ active: index === pathParts.length - 1 }"
+            @click="navigateTo(index)"
+          >
+            {{ part === '/' ? '/' : part }}
+          </span>
+          <span v-if="pathParts.length > 1" class="path-separator">/</span>
         </div>
       </div>
 
@@ -309,6 +378,11 @@ const fileExplorerClass = computed(() => {
         @dragleave="handleDragLeave"
         @drop="handleDrop"
       >
+        <div v-if="isLoading" class="loading-overlay">
+          <div class="spinner"></div>
+          <p>Загрузка файлов...</p>
+        </div>
+
         <ServerFile
           v-for="file in fileSystem"
           :key="file.fileName"
@@ -319,6 +393,10 @@ const fileExplorerClass = computed(() => {
           @double-click="handleFileDoubleClick"
           @drag-start="handleFileDragStart"
         />
+
+        <div v-if="!isLoading && fileSystem.length === 0" class="empty-folder">
+          <p>Папка пуста</p>
+        </div>
 
         <!-- Индикатор перетаскивания -->
         <div class="transfer-indicator" v-if="transferIndicator.isVisible">
@@ -501,12 +579,16 @@ const fileExplorerClass = computed(() => {
       background-color: #1e293b;
       padding: 6px 12px;
       border-radius: 8px;
+      flex-wrap: wrap;
+      max-width: 60%;
+      overflow-x: auto;
 
       .path-item {
         color: #94a3b8;
         font-size: 14px;
         cursor: pointer;
         transition: color 0.2s ease;
+        white-space: nowrap;
 
         &:hover {
           color: #f1f5f9;
@@ -534,12 +616,61 @@ const fileExplorerClass = computed(() => {
     background-color: #1e293b;
     border-radius: 12px;
     transition: all 0.3s ease;
+    min-height: 300px;
 
     &.drag-over {
       background-color: #2d3a4f;
       box-shadow: 0 0 0 2px #3b82f6;
       transform: scale(1.01);
     }
+
+    &.is-loading {
+      opacity: 0.7;
+    }
+  }
+}
+
+.loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background-color: rgba(15, 23, 42, 0.7);
+  border-radius: 12px;
+  z-index: 5;
+
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(59, 130, 246, 0.3);
+    border-radius: 50%;
+    border-top-color: #3b82f6;
+    animation: spin 1s linear infinite;
+  }
+
+  p {
+    color: #f1f5f9;
+    font-size: 16px;
+    font-weight: 500;
+  }
+}
+
+.empty-folder {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 150px;
+
+  p {
+    color: #94a3b8;
+    font-size: 16px;
   }
 }
 

@@ -1,4 +1,5 @@
 mod ssh;
+mod listdirectory;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
@@ -13,7 +14,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             ssh::ssh_connect,
-            ssh::list_directory
+            listdirectory::list_directory
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

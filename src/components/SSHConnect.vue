@@ -33,21 +33,23 @@ const connect = async () => {
   connectionError.value = null
 
   try {
-    // Разделяем user@host
-    let username = credentials.user
- 
+    const userInput = credentials.user
+    let username, host
 
-    if (credentials.user.includes('@')) {
-      const parts = credentials.user.split('@')
+    if (userInput.includes('@')) {
+      const parts = userInput.split('@')
       username = parts[0]
-
+      host = parts[1]
+    } else {
+      username = userInput
+      host = userInput
     }
 
     // Вызываем Rust-функцию для подключения по SSH
     await invoke('ssh_connect', {
       connectionInfo: {
         username: username,
-        host: credentials.user,
+        host: userInput, // Передаем весь ввод как хост
         password: credentials.password,
       },
     })
