@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import SSHContainer from './SSHContainer.vue'
+import { invoke } from '@tauri-apps/api/core'
 
 interface ServerCredential {
   id?: number
@@ -17,6 +18,7 @@ const connectionMessages = reactive({
   error: 'Неудачное подключение',
 })
 
+const connectionError = ref<string | null>(null)
 const credentials = reactive({
   user: '',
   password: '',
@@ -24,25 +26,48 @@ const credentials = reactive({
 
 const emit = defineEmits(['server-select'])
 
-const connect = () => {
+const connect = async () => {
   if (!credentials.user || !credentials.password) return
 
   connectionState.value = 'loading'
+  connectionError.value = null
 
-  // Имитация подключения
-  setTimeout(() => {
-    // Успех для демонстрации
+  try {
+    // Разделяем user@host
+    let username = credentials.user
+ 
+
+    if (credentials.user.includes('@')) {
+      const parts = credentials.user.split('@')
+      username = parts[0]
+
+    }
+
+    // Вызываем Rust-функцию для подключения по SSH
+    await invoke('ssh_connect', {
+      connectionInfo: {
+        username: username,
+        host: credentials.user,
+        password: credentials.password,
+      },
+    })
+
+    // Если подключение успешно
     connectionState.value = 'success'
 
     // После успешного подключения передаем данные наверх
     setTimeout(() => {
       emit('server-select', {
-        title: 'Быстрое подключение',
+        title: 'SSH Подключение',
         user: credentials.user,
         password: credentials.password,
       })
     }, 1000)
-  }, 2000)
+  } catch (error: any) {
+    connectionState.value = 'error'
+    connectionError.value = error.toString()
+    console.error('Ошибка при подключении:', error)
+  }
 }
 
 const handleServerSelect = (server: ServerCredential) => {
@@ -60,6 +85,10 @@ const startConnecting = () => {
     <div class="connection-status" :class="connectionState">
       <div class="status-icon"></div>
       <p class="status-message">{{ connectionMessages[connectionState] }}</p>
+    </div>
+
+    <div v-if="connectionError" class="connection-error">
+      <p>{{ connectionError }}</p>
     </div>
 
     <SSHContainer @server-select="handleServerSelect" @connecting="startConnecting" />
@@ -177,6 +206,19 @@ const startConnecting = () => {
     font-size: 16px;
     font-weight: 500;
     margin: 0;
+  }
+}
+
+.connection-error {
+  background-color: rgba(239, 68, 68, 0.1);
+  border: 1px solid #ef4444;
+  border-radius: 8px;
+  padding: 12px 16px;
+
+  p {
+    color: #ef4444;
+    margin: 0;
+    font-size: 14px;
   }
 }
 

@@ -14,9 +14,8 @@ const handleContextMenu = (event: MouseEvent) => {
 }
 
 const handleDoubleClick = () => {
-  if (!props.isFolder) {
-    emit('doubleClick', props.fileName)
-  }
+  // Событие двойного клика отправляем всегда, и для файлов, и для папок
+  emit('doubleClick', props.fileName)
 }
 
 const handleDragStart = (event: DragEvent) => {
@@ -88,10 +87,17 @@ const handleDragStart = (event: DragEvent) => {
     font-size: 14px;
     text-align: center;
     word-break: break-word;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   &.folder .file-name {
     color: #60a5fa;
+  }
+
+  &.folder:hover {
+    background-color: #3b5580;
   }
 
   &.file {
