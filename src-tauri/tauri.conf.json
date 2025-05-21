@@ -13,9 +13,14 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "sshconnectnew",
-        "width": 800,
-        "height": 600
+        "title": "SSH Connect",
+        "width": 1024,
+        "height": 768,
+        "minWidth": 800,
+        "minHeight": 600,
+        "visible": true,
+        "center": true,
+        "decorations": true
       }
     ],
     "security": {
