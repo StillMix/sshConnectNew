@@ -34,7 +34,25 @@ const renameState = ref({
 })
 
 const emit = defineEmits(['server-select', 'connecting'])
+const debugInfo = ref({
+  configPath: '',
+  showDebug: false,
+})
 
+const toggleDebug = async () => {
+  debugInfo.value.showDebug = !debugInfo.value.showDebug
+  if (debugInfo.value.showDebug) {
+    try {
+      debugInfo.value.configPath = await invoke('get_config_file_path')
+    } catch (error) {
+      console.error('Ошибка получения пути конфигурации:', error)
+    }
+  }
+}
+
+const reloadServers = () => {
+  loadServers()
+}
 const loadServers = async () => {
   try {
     const servers = (await invoke('load_servers')) as SSHCredential[]
@@ -154,6 +172,7 @@ onMounted(() => {
   <div class="ssh-container">
     <div class="container-header">
       <h2>Ваши адреса</h2>
+      <button class="debug-button" @click="toggleDebug">🔧</button>
       <button class="add-button" @click="toggleForm">
         <span class="button-icon">+</span>
         <span>Добавить</span>
@@ -194,6 +213,17 @@ onMounted(() => {
           <button type="submit" class="submit-button">Сохранить</button>
         </div>
       </form>
+    </transition>
+
+    <transition name="slide-fade">
+      <div v-if="debugInfo.showDebug" class="debug-panel">
+        <p><strong>Путь к конфигурации:</strong> {{ debugInfo.configPath }}</p>
+        <p><strong>Количество серверов:</strong> {{ credentials.length }}</p>
+        <div class="debug-actions">
+          <button @click="reloadServers" class="debug-action-btn">Перезагрузить</button>
+          <button @click="saveServers" class="debug-action-btn">Сохранить</button>
+        </div>
+      </div>
     </transition>
 
     <transition-group name="list" tag="div" class="cards">
@@ -385,5 +415,61 @@ onMounted(() => {
 
 .list-move {
   transition: transform 0.5s ease;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.debug-button {
+  background-color: #374151;
+  color: #9ca3af;
+  border: none;
+  border-radius: 6px;
+  width: 36px;
+  height: 36px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+
+  &:hover {
+    background-color: #4b5563;
+    color: #f3f4f6;
+  }
+}
+
+.debug-panel {
+  background-color: #374151;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: #e5e7eb;
+
+  p {
+    margin: 8px 0;
+  }
+
+  .debug-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .debug-action-btn {
+    background-color: #6b7280;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    font-size: 12px;
+    cursor: pointer;
+
+    &:hover {
+      background-color: #9ca3af;
+    }
+  }
 }
 </style>

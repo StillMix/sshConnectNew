@@ -17,7 +17,8 @@ pub fn run() {
             listdirectory::list_directory,
             storage::save_servers,
             storage::load_servers,
-            storage::delete_server
+            storage::delete_server,
+            storage::get_config_file_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
