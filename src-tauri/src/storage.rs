@@ -46,7 +46,7 @@ fn ensure_config_file_exists() -> Result<PathBuf, String> {
 
 #[command]
 pub fn add_server_to_config(title: String, user: String, password: String) -> Result<ServerConfig, String> {
-    let config_path = ensure_config_file_exists()?;
+    ensure_config_file_exists()?;
     
     let mut servers = load_servers_from_file()?;
     
@@ -69,17 +69,20 @@ pub fn add_server_to_config(title: String, user: String, password: String) -> Re
 pub fn update_server_in_config(id: u32, title: String, user: String, password: String) -> Result<ServerConfig, String> {
     let mut servers = load_servers_from_file()?;
     
-    let server = servers.iter_mut()
-        .find(|s| s.id == id)
+    let updated_server = ServerConfig {
+        id,
+        title,
+        user,
+        password,
+    };
+    
+    let server_index = servers.iter().position(|s| s.id == id)
         .ok_or_else(|| format!("Сервер с ID {} не найден", id))?;
     
-    server.title = title;
-    server.user = user;
-    server.password = password;
-    
+    servers[server_index] = updated_server.clone();
     save_servers_to_file(&servers)?;
     
-    Ok(server.clone())
+    Ok(updated_server)
 }
 
 #[command]
