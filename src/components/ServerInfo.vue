@@ -5,6 +5,7 @@ import RightClickMenu from './RightCLickMenu.vue'
 import ServerFile from './ServerFile.vue'
 import RenameDialog from './RenameDialog.vue'
 import ConfirmDialog from './ConfirmDialog.vue'
+import CreateFileDialog from './CreateFileDialog.vue'
 import { invoke } from '@tauri-apps/api/core'
 
 const props = defineProps<{
@@ -30,35 +31,34 @@ interface FileData {
 
 const emit = defineEmits(['disconnect', 'fileTransfer'])
 
-// Состояние для диалога переименования
 const renameDialogState = ref({
   isVisible: false,
   fileName: '',
   isFolder: false,
 })
 
-// Состояние для диалога подтверждения удаления
 const deleteDialogState = ref({
   isVisible: false,
   fileName: '',
   isFolder: false,
 })
 
+const createDialogState = ref({
+  isVisible: false,
+})
+
 const handleDisconnect = () => {
   emit('disconnect')
 }
 
-// Состояние для перетаскивания
 const isDragOver = ref(false)
 
-// Состояние для текстового редактора
 const textEditorState = ref({
   isOpen: false,
   fileName: '',
   content: '',
 })
 
-// Состояние для контекстного меню
 const contextMenu = ref({
   isVisible: false,
   x: 0,
@@ -67,7 +67,6 @@ const contextMenu = ref({
   isFolder: false,
 })
 
-// Состояние для отображения индикатора перетаскивания
 const transferIndicator = ref({
   isVisible: false,
   fileName: '',
@@ -75,12 +74,10 @@ const transferIndicator = ref({
   destinationServerId: '',
 })
 
-// Данные о файловой системе
 const fileSystem = ref<FileData[]>([])
 const currentPath = ref('/')
 const isLoading = ref(false)
 
-// Загрузка содержимого директории
 const loadDirectory = async (path = '/') => {
   if (!props.server) return
 
@@ -100,7 +97,6 @@ const loadDirectory = async (path = '/') => {
       path: path,
     })
 
-    // Преобразуем результат
     fileSystem.value = Array.isArray(files)
       ? files.map((file) => ({
           fileName: file.name,
@@ -112,13 +108,12 @@ const loadDirectory = async (path = '/') => {
     currentPath.value = path
   } catch (error) {
     console.error('Ошибка при загрузке директории:', error)
-    fileSystem.value = [] // Очищаем при ошибке
+    fileSystem.value = []
   } finally {
     isLoading.value = false
   }
 }
 
-// Обработка клика на папку
 const handleFolderClick = (fileName: string) => {
   const file = fileSystem.value.find((f) => f.fileName === fileName)
   if (file && file.isFolder) {
@@ -126,7 +121,6 @@ const handleFolderClick = (fileName: string) => {
   }
 }
 
-// Навигация по пути
 const pathParts = computed(() => {
   const parts = currentPath.value.split('/').filter(Boolean)
   return ['/', ...parts]
@@ -148,14 +142,12 @@ const deleteConfirmMessage = computed(() => {
   return `Вы уверены, что хотите удалить ${fileType} "${deleteDialogState.value.fileName}"?`
 })
 
-// Загрузка директории при монтировании компонента
 onMounted(() => {
   if (props.server) {
     loadDirectory('/')
   }
 })
 
-// Открывает текстовый редактор для файла
 const openTextEditor = (fileName: string, content: string = '') => {
   textEditorState.value = {
     isOpen: true,
@@ -164,18 +156,14 @@ const openTextEditor = (fileName: string, content: string = '') => {
   }
 }
 
-// Обработчик сохранения файла
 const handleSaveFile = (fileData: { fileName: string; content: string }) => {
   console.log('Сохранение файла:', fileData)
-  // Здесь будет логика сохранения файла
 }
 
-// Закрытие текстового редактора
 const closeTextEditor = () => {
   textEditorState.value.isOpen = false
 }
 
-// Открывает контекстное меню
 const showContextMenu = (event: MouseEvent, fileName: string, isFolder: boolean = false) => {
   event.preventDefault()
   if (event.target && (event.target as HTMLElement).closest('.file-item')) {
@@ -188,12 +176,11 @@ const showContextMenu = (event: MouseEvent, fileName: string, isFolder: boolean 
     }
   }
 }
-// Закрывает контекстное меню
+
 const closeContextMenu = () => {
   contextMenu.value.isVisible = false
 }
 
-// Обработчики для контекстного меню
 const handleRename = () => {
   renameDialogState.value = {
     isVisible: true,
@@ -212,7 +199,6 @@ const handleDelete = () => {
   closeContextMenu()
 }
 
-// Функции для работы с диалогом переименования
 const confirmRename = (newFileName: string) => {
   if (newFileName && newFileName.trim() !== '') {
     const fileIndex = fileSystem.value.findIndex(
@@ -231,7 +217,6 @@ const cancelRename = () => {
   renameDialogState.value.isVisible = false
 }
 
-// Функции для работы с диалогом подтверждения удаления
 const confirmDelete = () => {
   const fileIndex = fileSystem.value.findIndex(
     (file) => file.fileName === deleteDialogState.value.fileName,
@@ -248,7 +233,6 @@ const cancelDelete = () => {
   deleteDialogState.value.isVisible = false
 }
 
-// Обработка двойного клика на файле
 const handleFileDoubleClick = (fileName: string) => {
   const file = fileSystem.value.find((f) => f.fileName === fileName)
 
@@ -259,12 +243,10 @@ const handleFileDoubleClick = (fileName: string) => {
     return
   }
 
-  // Для файлов открываем текстовый редактор
   const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
   openTextEditor(fileName, fileContent)
 }
 
-// Обработчики drag and drop
 const handleDragOver = (event: DragEvent) => {
   event.preventDefault()
   if (event.dataTransfer) {
@@ -321,12 +303,10 @@ const handleDrop = (event: DragEvent) => {
   }
 }
 
-// Начало перетаскивания файла
 const handleFileDragStart = (fileData: FileDragData) => {
   console.log('Начало перетаскивания файла:', fileData)
 }
 
-// Вычисляемое свойство для класса file-explorer
 const fileExplorerClass = computed(() => {
   return {
     'file-explorer': true,
@@ -334,7 +314,28 @@ const fileExplorerClass = computed(() => {
     'is-loading': isLoading.value,
   }
 })
+
+const openCreateDialog = () => {
+  createDialogState.value.isVisible = true
+}
+
+const confirmCreate = (data: { name: string; isFolder: boolean }) => {
+  const newPath = currentPath.value + (currentPath.value.endsWith('/') ? '' : '/') + data.name
+
+  fileSystem.value.push({
+    fileName: data.name,
+    isFolder: data.isFolder,
+    path: newPath,
+  })
+
+  createDialogState.value.isVisible = false
+}
+
+const cancelCreate = () => {
+  createDialogState.value.isVisible = false
+}
 </script>
+
 <template>
   <div class="serverinfo">
     <div class="server-header">
@@ -370,6 +371,10 @@ const fileExplorerClass = computed(() => {
           </span>
           <span v-if="pathParts.length > 1" class="path-separator">/</span>
         </div>
+        <button class="create-button" @click="openCreateDialog">
+          <span class="button-icon">+</span>
+          <span>Создать</span>
+        </button>
       </div>
 
       <div
@@ -398,7 +403,6 @@ const fileExplorerClass = computed(() => {
           <p>Папка пуста</p>
         </div>
 
-        <!-- Индикатор перетаскивания -->
         <div class="transfer-indicator" v-if="transferIndicator.isVisible">
           <div class="indicator-content">
             <div class="spinner"></div>
@@ -408,7 +412,6 @@ const fileExplorerClass = computed(() => {
       </div>
     </div>
 
-    <!-- Текстовый редактор -->
     <TextEdit
       v-if="textEditorState.isOpen"
       :fileName="textEditorState.fileName"
@@ -418,7 +421,6 @@ const fileExplorerClass = computed(() => {
       @close="closeTextEditor"
     />
 
-    <!-- Контекстное меню -->
     <RightClickMenu
       v-if="contextMenu.isVisible"
       :x="contextMenu.x"
@@ -430,7 +432,6 @@ const fileExplorerClass = computed(() => {
       @close="closeContextMenu"
     />
 
-    <!-- Диалог переименования -->
     <RenameDialog
       :isVisible="renameDialogState.isVisible"
       :fileName="renameDialogState.fileName"
@@ -439,7 +440,6 @@ const fileExplorerClass = computed(() => {
       @cancel="cancelRename"
     />
 
-    <!-- Диалог подтверждения удаления -->
     <ConfirmDialog
       :isVisible="deleteDialogState.isVisible"
       :title="'Удаление ' + (deleteDialogState.isFolder ? 'папки' : 'файла')"
@@ -448,6 +448,12 @@ const fileExplorerClass = computed(() => {
       :isDelete="true"
       @confirm="confirmDelete"
       @cancel="cancelDelete"
+    />
+
+    <CreateFileDialog
+      :isVisible="createDialogState.isVisible"
+      @confirm="confirmCreate"
+      @cancel="cancelCreate"
     />
   </div>
 </template>
@@ -580,7 +586,7 @@ const fileExplorerClass = computed(() => {
       padding: 6px 12px;
       border-radius: 8px;
       flex-wrap: wrap;
-      max-width: 60%;
+      max-width: 50%;
       overflow-x: auto;
 
       .path-item {
@@ -603,6 +609,35 @@ const fileExplorerClass = computed(() => {
       .path-separator {
         color: #64748b;
         font-size: 14px;
+      }
+    }
+
+    .create-button {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background-color: #10b981;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+
+      &:hover {
+        background-color: #059669;
+        transform: translateY(-2px);
+      }
+
+      &:active {
+        transform: translateY(0);
+      }
+
+      .button-icon {
+        font-size: 16px;
+        font-weight: bold;
       }
     }
   }
