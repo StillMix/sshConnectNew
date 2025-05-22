@@ -309,18 +309,27 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
 
     let sess = create_ssh_session(&connection_info)?;
     
+    let temp_file = format!("/tmp/ssh_editor_{}", std::process::id());
+    
+    let sftp = sess.sftp()
+        .map_err(|e| format!("Ошибка создания SFTP канала: {}", e))?;
+    
+    {
+        let mut file = sftp.create(&std::path::Path::new(&temp_file))
+            .map_err(|e| format!("Ошибка создания временного файла: {}", e))?;
+        
+        use std::io::Write;
+        file.write_all(content.as_bytes())
+            .map_err(|e| format!("Ошибка записи во временный файл: {}", e))?;
+    }
+    
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let temp_file = format!("/tmp/ssh_editor_{}", std::process::id());
-    let escaped_content = content.replace("'", "'\"'\"'");
     let escaped_path = file_path.replace("'", "'\"'\"'");
     let escaped_temp = temp_file.replace("'", "'\"'\"'");
     
-    let command = format!(
-        "echo '{}' > '{}' && cp '{}' '{}' && rm '{}'",
-        escaped_content, escaped_temp, escaped_temp, escaped_path, escaped_temp
-    );
+    let command = format!("cp '{}' '{}' && rm '{}'", escaped_temp, escaped_path, escaped_temp);
     
     channel.exec(&command)
         .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
@@ -341,12 +350,12 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
             let mut sudo_channel = sess.channel_session()
                 .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
             
-            let final_sudo_command = format!(
-                "echo '{}' | sudo -S sh -c \"echo '{}' > '{}'\"",
-                connection_info.password, escaped_content, escaped_path
+            let sudo_command = format!(
+                "echo '{}' | sudo -S cp '{}' '{}'",
+                connection_info.password, escaped_temp, escaped_path
             );
             
-            sudo_channel.exec(&final_sudo_command)
+            sudo_channel.exec(&sudo_command)
                 .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
             
             let mut sudo_output = String::new();
@@ -363,6 +372,13 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
                 return Err(format!("Ошибка сохранения файла с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
             }
             
+            let mut cleanup_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для очистки: {}", e))?;
+            
+            let cleanup_command = format!("rm '{}'", escaped_temp);
+            let _ = cleanup_channel.exec(&cleanup_command);
+            let _ = cleanup_channel.wait_close();
+            
             return Ok("Файл успешно сохранен с правами администратора".to_string());
         }
         
@@ -371,7 +387,6 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
 
     Ok("Файл успешно сохранен".to_string())
 }
-
 #[command]
 pub fn check_file_permissions(file_path: String) -> Result<bool, String> {
     let filename = file_path.split('/').last().unwrap_or(&file_path);
