@@ -319,16 +319,46 @@ const openCreateDialog = () => {
   createDialogState.value.isVisible = true
 }
 
-const confirmCreate = (data: { name: string; isFolder: boolean }) => {
+const confirmCreate = async (data: { name: string; isFolder: boolean }) => {
+  if (!props.server) return
+
   const newPath = currentPath.value + (currentPath.value.endsWith('/') ? '' : '/') + data.name
 
-  fileSystem.value.push({
-    fileName: data.name,
-    isFolder: data.isFolder,
-    path: newPath,
-  })
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
 
-  createDialogState.value.isVisible = false
+    if (data.isFolder) {
+      await invoke('create_directory', {
+        connectionInfo: {
+          username: username,
+          host: props.server.user,
+          password: props.server.password,
+        },
+        dirPath: newPath,
+      })
+    } else {
+      await invoke('create_file', {
+        connectionInfo: {
+          username: username,
+          host: props.server.user,
+          password: props.server.password,
+        },
+        filePath: newPath,
+      })
+    }
+
+    fileSystem.value.push({
+      fileName: data.name,
+      isFolder: data.isFolder,
+      path: newPath,
+    })
+
+    createDialogState.value.isVisible = false
+  } catch (error) {
+    console.error(`Ошибка создания ${data.isFolder ? 'папки' : 'файла'}:`, error)
+  }
 }
 
 const cancelCreate = () => {
