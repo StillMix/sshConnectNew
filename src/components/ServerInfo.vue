@@ -23,6 +23,12 @@ interface FileDragData {
   serverId: string
 }
 
+interface FileContent {
+  content: string
+  is_editable: boolean
+  file_type: string
+}
+
 interface FileData {
   fileName: string
   isFolder: boolean
@@ -156,8 +162,31 @@ const openTextEditor = (fileName: string, content: string = '') => {
   }
 }
 
-const handleSaveFile = (fileData: { fileName: string; content: string }) => {
-  console.log('Сохранение файла:', fileData)
+const handleSaveFile = async (fileData: { fileName: string; content: string }) => {
+  if (!props.server) return
+
+  const file = fileSystem.value.find((f) => f.fileName === fileData.fileName)
+  if (!file) return
+
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    await invoke('save_file_content', {
+      connectionInfo: {
+        username: username,
+        host: props.server.user,
+        password: props.server.password,
+      },
+      filePath: file.path,
+      content: fileData.content,
+    })
+
+    console.log('Файл успешно сохранен')
+  } catch (error) {
+    console.error('Ошибка сохранения файла:', error)
+  }
 }
 
 const closeTextEditor = () => {
@@ -199,15 +228,40 @@ const handleDelete = () => {
   closeContextMenu()
 }
 
-const confirmRename = (newFileName: string) => {
-  if (newFileName && newFileName.trim() !== '') {
-    const fileIndex = fileSystem.value.findIndex(
-      (file) => file.fileName === renameDialogState.value.fileName,
-    )
+const confirmRename = async (newFileName: string) => {
+  if (!newFileName || newFileName.trim() === '' || !props.server) return
 
+  const file = fileSystem.value.find((f) => f.fileName === renameDialogState.value.fileName)
+  if (!file) return
+
+  const oldPath = file.path
+  const newPath =
+    currentPath.value + (currentPath.value.endsWith('/') ? '' : '/') + newFileName.trim()
+
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    await invoke('rename_file', {
+      connectionInfo: {
+        username: username,
+        host: props.server.user,
+        password: props.server.password,
+      },
+      oldPath: oldPath,
+      newPath: newPath,
+    })
+
+    const fileIndex = fileSystem.value.findIndex(
+      (f) => f.fileName === renameDialogState.value.fileName,
+    )
     if (fileIndex !== -1) {
       fileSystem.value[fileIndex].fileName = newFileName.trim()
+      fileSystem.value[fileIndex].path = newPath
     }
+  } catch (error) {
+    console.error('Ошибка переименования:', error)
   }
 
   renameDialogState.value.isVisible = false
@@ -217,23 +271,54 @@ const cancelRename = () => {
   renameDialogState.value.isVisible = false
 }
 
-const confirmDelete = () => {
-  const fileIndex = fileSystem.value.findIndex(
-    (file) => file.fileName === deleteDialogState.value.fileName,
-  )
+const confirmDelete = async () => {
+  if (!props.server) return
 
-  if (fileIndex !== -1) {
-    fileSystem.value.splice(fileIndex, 1)
+  const file = fileSystem.value.find((f) => f.fileName === deleteDialogState.value.fileName)
+  if (!file) return
+
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    if (file.isFolder) {
+      await invoke('delete_directory', {
+        connectionInfo: {
+          username: username,
+          host: props.server.user,
+          password: props.server.password,
+        },
+        dirPath: file.path,
+      })
+    } else {
+      await invoke('delete_file', {
+        connectionInfo: {
+          username: username,
+          host: props.server.user,
+          password: props.server.password,
+        },
+        filePath: file.path,
+      })
+    }
+
+    const fileIndex = fileSystem.value.findIndex(
+      (f) => f.fileName === deleteDialogState.value.fileName,
+    )
+    if (fileIndex !== -1) {
+      fileSystem.value.splice(fileIndex, 1)
+    }
+  } catch (error) {
+    console.error('Ошибка удаления:', error)
   }
 
   deleteDialogState.value.isVisible = false
 }
-
 const cancelDelete = () => {
   deleteDialogState.value.isVisible = false
 }
 
-const handleFileDoubleClick = (fileName: string) => {
+const handleFileDoubleClick = async (fileName: string) => {
   const file = fileSystem.value.find((f) => f.fileName === fileName)
 
   if (!file) return
@@ -243,8 +328,32 @@ const handleFileDoubleClick = (fileName: string) => {
     return
   }
 
-  const fileContent = `Это содержимое файла ${fileName}.\nВы можете редактировать этот текст.`
-  openTextEditor(fileName, fileContent)
+  if (!props.server) return
+
+  try {
+    const username = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    const fileContent = (await invoke('read_file_content', {
+      connectionInfo: {
+        username: username,
+        host: props.server.user,
+        password: props.server.password,
+      },
+      filePath: file.path,
+    })) as FileContent
+
+    if (fileContent.is_editable) {
+      openTextEditor(fileName, fileContent.content)
+    } else {
+      openTextEditor(fileName, fileContent.content)
+    }
+  } catch (error) {
+    console.error('Ошибка чтения файла:', error)
+    const errorContent = `Ошибка чтения файла: ${error}`
+    openTextEditor(fileName, errorContent)
+  }
 }
 
 const handleDragOver = (event: DragEvent) => {

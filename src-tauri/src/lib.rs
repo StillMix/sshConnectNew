@@ -2,6 +2,7 @@ mod ssh;
 mod listdirectory;
 mod storage;
 mod file;
+mod file_operations;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -21,12 +22,14 @@ pub fn run() {
             storage::remove_server_from_config,
             storage::load_servers_from_config,
             storage::get_config_path,
-            file::create_file,
-            file::create_directory,
             file::check_file_permissions,
             file::save_file_content,
             file::read_file_content,
-            file::create_directory
+            file_operations::create_file,
+            file_operations::create_directory,
+            file_operations::delete_file,
+            file_operations::delete_directory,
+            file_operations::rename_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
