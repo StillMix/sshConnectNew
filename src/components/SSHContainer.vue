@@ -43,7 +43,7 @@ const toggleDebug = async () => {
   debugInfo.value.showDebug = !debugInfo.value.showDebug
   if (debugInfo.value.showDebug) {
     try {
-      debugInfo.value.configPath = await invoke('get_config_file_path')
+      debugInfo.value.configPath = await invoke('get_config_path')
     } catch (error) {
       console.error('Ошибка получения пути конфигурации:', error)
     }
@@ -55,16 +55,11 @@ const reloadServers = () => {
 }
 const loadServers = async () => {
   try {
-    const servers = (await invoke('load_servers')) as SSHCredential[]
+    const servers = (await invoke('load_servers_from_config')) as SSHCredential[]
     credentials.splice(0, credentials.length, ...servers)
   } catch (error) {
     console.error('Ошибка загрузки серверов:', error)
-    credentials.splice(
-      0,
-      credentials.length,
-      { id: 1, title: 'Сервер разработки', user: 'dev@192.168.1.10', password: 'dev2024!' },
-      { id: 2, title: 'Prod сервер', user: 'admin@10.0.15.25', password: 'Pr0d$ecure' },
-    )
+    credentials.splice(0, credentials.length)
   }
 }
 
@@ -82,21 +77,23 @@ const toggleForm = () => {
 
 const addCredential = async () => {
   if (newCredential.title && newCredential.user && newCredential.password) {
-    const newServer = {
-      id: Date.now(),
-      title: newCredential.title,
-      user: newCredential.user,
-      password: newCredential.password,
+    try {
+      const newServer = await invoke('add_server_to_config', {
+        title: newCredential.title,
+        user: newCredential.user,
+        password: newCredential.password,
+      }) as SSHCredential
+
+      credentials.push(newServer)
+
+      newCredential.title = ''
+      newCredential.user = ''
+      newCredential.password = ''
+
+      showForm.value = false
+    } catch (error) {
+      console.error('Ошибка добавления сервера:', error)
     }
-
-    credentials.push(newServer)
-    await saveServers()
-
-    newCredential.title = ''
-    newCredential.user = ''
-    newCredential.password = ''
-
-    showForm.value = false
   }
 }
 
@@ -125,7 +122,7 @@ const closeContextMenu = () => {
 
 const handleDelete = async () => {
   try {
-    await invoke('delete_server', { serverId: contextMenu.value.serverId })
+    await invoke('remove_server_from_config', { id: contextMenu.value.serverId })
     const index = credentials.findIndex((cred) => cred.id === contextMenu.value.serverId)
     if (index !== -1) {
       credentials.splice(index, 1)
@@ -135,6 +132,7 @@ const handleDelete = async () => {
   }
   closeContextMenu()
 }
+
 
 const handleRename = () => {
   const server = credentials.find((cred) => cred.id === contextMenu.value.serverId)
@@ -153,8 +151,18 @@ const applyRename = async () => {
 
   const server = credentials.find((cred) => cred.id === renameState.value.serverId)
   if (server) {
-    server.title = renameState.value.newTitle
-    await saveServers()
+    try {
+      const updatedServer = await invoke('update_server_in_config', {
+        id: server.id,
+        title: renameState.value.newTitle,
+        user: server.user,
+        password: server.password,
+      }) as SSHCredential
+
+      server.title = updatedServer.title
+    } catch (error) {
+      console.error('Ошибка переименования сервера:', error)
+    }
   }
 
   renameState.value.isVisible = false

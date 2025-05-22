@@ -10,12 +10,8 @@ pub struct ServerConfig {
     pub user: String,
     pub password: String,
 }
-#[command]
-pub fn get_config_file_path() -> Result<String, String> {
-    let config_path = get_config_path()?;
-    Ok(config_path.to_string_lossy().to_string())
-}
-fn get_config_path() -> Result<PathBuf, String> {
+
+fn get_config_dir() -> Result<PathBuf, String> {
     let home_dir = std::env::var("HOME")
         .or_else(|_| std::env::var("USERPROFILE"))
         .map_err(|_| "Не удалось определить домашнюю директорию")?;
@@ -24,64 +20,118 @@ fn get_config_path() -> Result<PathBuf, String> {
     path.push(".ssh-connect");
     
     if !path.exists() {
-        fs::create_dir_all(&path).map_err(|e| format!("Ошибка создания директории {}: {}", path.display(), e))?;
-        println!("Создана директория: {:?}", path);
+        fs::create_dir_all(&path)
+            .map_err(|e| format!("Ошибка создания директории {}: {}", path.display(), e))?;
     }
     
-    path.push("servers.json");
-    println!("Путь к файлу конфигурации: {:?}", path);
     Ok(path)
 }
 
-#[command]
-pub fn save_servers(servers: Vec<ServerConfig>) -> Result<String, String> {
-    let config_path = get_config_path()?;
-    println!("Сохранение {} серверов в {:?}", servers.len(), config_path);
+fn get_config_file_path() -> Result<PathBuf, String> {
+    let mut config_dir = get_config_dir()?;
+    config_dir.push("servers.json");
+    Ok(config_dir)
+}
+
+fn ensure_config_file_exists() -> Result<PathBuf, String> {
+    let config_path = get_config_file_path()?;
     
-    let json_data = serde_json::to_string_pretty(&servers)
-        .map_err(|e| format!("Ошибка сериализации: {}", e))?;
+    if !config_path.exists() {
+        fs::write(&config_path, "[]")
+            .map_err(|e| format!("Ошибка создания файла конфигурации: {}", e))?;
+    }
     
-    fs::write(&config_path, &json_data)
-        .map_err(|e| format!("Ошибка записи файла {}: {}", config_path.display(), e))?;
-    
-    println!("Серверы успешно сохранены в файл");
-    Ok(format!("Серверы сохранены в {}", config_path.display()))
+    Ok(config_path)
 }
 
 #[command]
-pub fn load_servers() -> Result<Vec<ServerConfig>, String> {
-    let config_path = get_config_path()?;
+pub fn add_server_to_config(title: String, user: String, password: String) -> Result<ServerConfig, String> {
+    let config_path = ensure_config_file_exists()?;
     
-    if !config_path.exists() {
-        println!("Файл конфигурации не существует: {:?}", config_path);
-        return Ok(vec![]);
+    let mut servers = load_servers_from_file()?;
+    
+    let new_id = servers.iter().map(|s| s.id).max().unwrap_or(0) + 1;
+    
+    let new_server = ServerConfig {
+        id: new_id,
+        title,
+        user,
+        password,
+    };
+    
+    servers.push(new_server.clone());
+    save_servers_to_file(&servers)?;
+    
+    Ok(new_server)
+}
+
+#[command]
+pub fn update_server_in_config(id: u32, title: String, user: String, password: String) -> Result<ServerConfig, String> {
+    let mut servers = load_servers_from_file()?;
+    
+    let server = servers.iter_mut()
+        .find(|s| s.id == id)
+        .ok_or_else(|| format!("Сервер с ID {} не найден", id))?;
+    
+    server.title = title;
+    server.user = user;
+    server.password = password;
+    
+    save_servers_to_file(&servers)?;
+    
+    Ok(server.clone())
+}
+
+#[command]
+pub fn remove_server_from_config(id: u32) -> Result<String, String> {
+    let mut servers = load_servers_from_file()?;
+    
+    let initial_len = servers.len();
+    servers.retain(|s| s.id != id);
+    
+    if servers.len() == initial_len {
+        return Err(format!("Сервер с ID {} не найден", id));
     }
     
+    save_servers_to_file(&servers)?;
+    Ok(format!("Сервер с ID {} удален", id))
+}
+
+#[command]
+pub fn load_servers_from_config() -> Result<Vec<ServerConfig>, String> {
+    load_servers_from_file()
+}
+
+#[command]
+pub fn get_config_path() -> Result<String, String> {
+    let config_path = get_config_file_path()?;
+    Ok(config_path.to_string_lossy().to_string())
+}
+
+fn load_servers_from_file() -> Result<Vec<ServerConfig>, String> {
+    let config_path = ensure_config_file_exists()?;
+    
     let json_data = fs::read_to_string(&config_path)
-        .map_err(|e| format!("Ошибка чтения файла {}: {}", config_path.display(), e))?;
+        .map_err(|e| format!("Ошибка чтения файла конфигурации: {}", e))?;
     
     if json_data.trim().is_empty() {
-        println!("Файл конфигурации пуст");
         return Ok(vec![]);
     }
     
     let servers: Vec<ServerConfig> = serde_json::from_str(&json_data)
-        .map_err(|e| format!("Ошибка десериализации: {}", e))?;
+        .map_err(|e| format!("Ошибка парсинга конфигурации: {}", e))?;
     
-    println!("Загружено {} серверов из файла", servers.len());
     Ok(servers)
 }
 
-#[command]
-pub fn delete_server(server_id: u32) -> Result<String, String> {
-    let mut servers = load_servers()?;
-    let initial_count = servers.len();
-    servers.retain(|server| server.id != server_id);
+fn save_servers_to_file(servers: &[ServerConfig]) -> Result<(), String> {
+    let config_path = ensure_config_file_exists()?;
     
-    if servers.len() == initial_count {
-        return Err(format!("Сервер с ID {} не найден", server_id));
-    }
+    let json_data = serde_json::to_string_pretty(servers)
+        .map_err(|e| format!("Ошибка сериализации конфигурации: {}", e))?;
     
-    save_servers(servers)?;
-    Ok(format!("Сервер с ID {} удален", server_id))
+    fs::write(&config_path, json_data)
+        .map_err(|e| format!("Ошибка записи файла конфигурации: {}", e))?;
+    
+    Ok(())
 }

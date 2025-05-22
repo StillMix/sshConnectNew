@@ -15,10 +15,11 @@ pub fn run() {
             greet,
             ssh::ssh_connect,
             listdirectory::list_directory,
-            storage::save_servers,
-            storage::load_servers,
-            storage::delete_server,
-            storage::get_config_file_path
+            storage::add_server_to_config,
+            storage::update_server_in_config,
+            storage::remove_server_from_config,
+            storage::load_servers_from_config,
+            storage::get_config_path
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
