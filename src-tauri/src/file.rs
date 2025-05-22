@@ -21,20 +21,75 @@ pub struct FileContent {
     pub file_size: Option<u64>,
 }
 
+
 fn is_text_file(filename: &str) -> bool {
     let text_extensions = [
         "txt", "md", "js", "ts", "html", "css", "scss", "json", "xml", "yaml", "yml",
         "toml", "ini", "cfg", "conf", "log", "sh", "py", "rs", "go", "php", "cpp",
         "c", "h", "hpp", "java", "kt", "swift", "rb", "pl", "lua", "sql", "vue",
-        "jsx", "tsx", "scss", "less", "styl", "mod", "env", "dockerfile", "makefile"
+        "jsx", "tsx", "scss", "less", "styl", "mod", "env", "dockerfile", "makefile",
+        "gitignore", "gitconfig", "editorconfig", "prettierrc", "eslintrc", "babelrc",
+        "npmrc", "yarnrc", "nvmrc", "bashrc", "zshrc", "vimrc", "tmux", "profile",
+        "bashprofile", "zshprofile", "fish", "tcsh", "csh", "ksh", "bat", "cmd",
+        "ps1", "psm1", "psd1", "ps1xml", "pssc", "psrc", "psc1", "R", "r", "Rmd",
+        "tex", "bib", "cls", "sty", "dtx", "ins", "ltx", "rtx", "ctx", "lco",
+        "def", "fd", "bbx", "cbx", "lbx", "TeX", "LaTeX", "bibtex", "context",
+        "readme", "license", "changelog", "authors", "contributors", "copying",
+        "install", "news", "todo", "version", "history", "notice", "acknowledgments"
     ];
     
     if let Some(ext) = filename.split('.').last() {
-        text_extensions.contains(&ext.to_lowercase().as_str())
+        let ext_lower = ext.to_lowercase();
+        text_extensions.contains(&ext_lower.as_str())
     } else {
-        false
+        let filename_lower = filename.to_lowercase();
+        text_extensions.contains(&filename_lower.as_str()) ||
+        filename_lower.starts_with("readme") ||
+        filename_lower.starts_with("license") ||
+        filename_lower.starts_with("changelog") ||
+        filename_lower.starts_with("makefile") ||
+        filename_lower.starts_with("dockerfile") ||
+        filename_lower.starts_with(".env") ||
+        filename_lower.starts_with(".git")
     }
 }
+
+fn is_likely_text_file(file_path: &str, content: &str) -> bool {
+    let filename = file_path.split('/').last().unwrap_or(file_path);
+    
+    if is_text_file(filename) {
+        return true;
+    }
+    
+    let path_lower = file_path.to_lowercase();
+    let common_text_paths = [
+        "/etc/", "/usr/share/", "/var/log/", "/home/", "/root/", "/opt/",
+        "/usr/local/", "/srv/", "/var/www/", "/var/lib/", "/usr/bin/",
+        "/usr/sbin/", "/bin/", "/sbin/"
+    ];
+    
+    for path in &common_text_paths {
+        if path_lower.starts_with(path) {
+            break;
+        }
+    }
+    
+    if content.len() > 1000 {
+        let sample = &content[..1000];
+        let non_printable_count = sample.chars()
+            .filter(|c| !c.is_ascii_graphic() && !c.is_ascii_whitespace())
+            .count();
+        
+        return non_printable_count < 50;
+    }
+    
+    let non_printable_count = content.chars()
+        .filter(|c| !c.is_ascii_graphic() && !c.is_ascii_whitespace())
+        .count();
+    
+    return non_printable_count < (content.len() / 10);
+}
+
 
 fn get_file_type(filename: &str) -> String {
     if let Some(ext) = filename.split('.').last() {
@@ -248,9 +303,7 @@ pub fn read_file_content(connection_info: SshConnectionInfo, file_path: String) 
 
 #[command]
 pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, content: String) -> Result<String, String> {
-    let filename = file_path.split('/').last().unwrap_or(&file_path);
-    
-    if !is_text_file(filename) {
+    if !is_likely_text_file(&file_path, &content) {
         return Err("Этот тип файла нельзя редактировать".to_string());
     }
 
@@ -259,15 +312,24 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
+    let temp_file = format!("/tmp/ssh_editor_{}", std::process::id());
     let escaped_content = content.replace("'", "'\"'\"'");
-    let command = format!("echo '{}' > '{}'", escaped_content, file_path.replace("'", "'\"'\"'"));
+    let escaped_path = file_path.replace("'", "'\"'\"'");
+    let escaped_temp = temp_file.replace("'", "'\"'\"'");
+    
+    let command = format!(
+        "echo '{}' > '{}' && cp '{}' '{}' && rm '{}'",
+        escaped_content, escaped_temp, escaped_temp, escaped_path, escaped_temp
+    );
     
     channel.exec(&command)
         .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -275,7 +337,34 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка сохранения файла".to_string());
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo tee '{}' > /dev/null",
+                escaped_content, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка сохранения файла с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Файл успешно сохранен с правами администратора".to_string());
+        }
+        
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Файл успешно сохранен".to_string())
