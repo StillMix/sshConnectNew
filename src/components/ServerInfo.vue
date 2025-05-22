@@ -438,24 +438,30 @@ const confirmCreate = async (data: { name: string; isFolder: boolean }) => {
       ? props.server.user.split('@')[0]
       : props.server.user
 
+    const connectionInfo = {
+      username: username,
+      host: props.server.user,
+      password: props.server.password,
+    }
+
+    console.log('Создание элемента:', {
+      type: data.isFolder ? 'папка' : 'файл',
+      path: newPath,
+      connectionInfo: { ...connectionInfo, password: '***' },
+    })
+
     if (data.isFolder) {
       await invoke('create_directory', {
-        connectionInfo: {
-          username: username,
-          host: props.server.user,
-          password: props.server.password,
-        },
+        connectionInfo: connectionInfo,
         dirPath: newPath,
       })
+      console.log('Папка успешно создана')
     } else {
       await invoke('create_file', {
-        connectionInfo: {
-          username: username,
-          host: props.server.user,
-          password: props.server.password,
-        },
+        connectionInfo: connectionInfo,
         filePath: newPath,
       })
+      console.log('Файл успешно создан')
     }
 
     fileSystem.value.push({
@@ -466,7 +472,11 @@ const confirmCreate = async (data: { name: string; isFolder: boolean }) => {
 
     createDialogState.value.isVisible = false
   } catch (error) {
-    console.error(`Ошибка создания ${data.isFolder ? 'папки' : 'файла'}:`, error)
+    console.error(`Подробная ошибка создания ${data.isFolder ? 'папки' : 'файла'}:`, error)
+    console.error('Тип ошибки:', typeof error)
+
+
+    alert(`Ошибка создания ${data.isFolder ? 'папки' : 'файла'}: ${error}`)
   }
 }
 

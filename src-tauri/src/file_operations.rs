@@ -11,8 +11,6 @@ pub struct SshConnectionInfo {
     pub password: String,
 }
 
-
-
 fn create_ssh_session(connection_info: &SshConnectionInfo) -> Result<Session, String> {
     let host_string = if connection_info.host.contains('@') {
         connection_info.host.clone()
@@ -45,8 +43,6 @@ fn create_ssh_session(connection_info: &SshConnectionInfo) -> Result<Session, St
     Ok(sess)
 }
 
-
-
 #[command]
 pub fn create_file(connection_info: SshConnectionInfo, file_path: String) -> Result<String, String> {
     let sess = create_ssh_session(&connection_info)?;
@@ -54,14 +50,17 @@ pub fn create_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let command = format!("touch '{}'", file_path.replace("'", "'\"'\"'"));
+    let escaped_path = file_path.replace("'", "'\"'\"'");
+    let command = format!("touch '{}'", escaped_path);
     
     channel.exec(&command)
-        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+        .map_err(|e| format!("Ошибка выполнения команды touch: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -69,7 +68,7 @@ pub fn create_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка создания файла".to_string());
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Файл успешно создан".to_string())
@@ -82,14 +81,17 @@ pub fn create_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let command = format!("mkdir -p '{}'", dir_path.replace("'", "'\"'\"'"));
+    let escaped_path = dir_path.replace("'", "'\"'\"'");
+    let command = format!("mkdir -p '{}'", escaped_path);
     
     channel.exec(&command)
-        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+        .map_err(|e| format!("Ошибка выполнения команды mkdir: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -97,7 +99,7 @@ pub fn create_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка создания папки".to_string());
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Папка успешно создана".to_string())
@@ -110,14 +112,17 @@ pub fn delete_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let command = format!("rm '{}'", file_path.replace("'", "'\"'\"'"));
+    let escaped_path = file_path.replace("'", "'\"'\"'");
+    let command = format!("rm '{}'", escaped_path);
     
     channel.exec(&command)
-        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+        .map_err(|e| format!("Ошибка выполнения команды rm: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -125,7 +130,7 @@ pub fn delete_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка удаления файла".to_string());
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Файл успешно удален".to_string())
@@ -138,14 +143,17 @@ pub fn delete_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let command = format!("rm -rf '{}'", dir_path.replace("'", "'\"'\"'"));
+    let escaped_path = dir_path.replace("'", "'\"'\"'");
+    let command = format!("rm -rf '{}'", escaped_path);
     
     channel.exec(&command)
-        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+        .map_err(|e| format!("Ошибка выполнения команды rm -rf: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -153,7 +161,7 @@ pub fn delete_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка удаления папки".to_string());
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Папка успешно удалена".to_string())
@@ -166,17 +174,18 @@ pub fn rename_file(connection_info: SshConnectionInfo, old_path: String, new_pat
     let mut channel = sess.channel_session()
         .map_err(|e| format!("Ошибка создания канала: {}", e))?;
 
-    let command = format!("mv '{}' '{}'", 
-        old_path.replace("'", "'\"'\"'"), 
-        new_path.replace("'", "'\"'\"'")
-    );
+    let escaped_old = old_path.replace("'", "'\"'\"'");
+    let escaped_new = new_path.replace("'", "'\"'\"'");
+    let command = format!("mv '{}' '{}'", escaped_old, escaped_new);
     
     channel.exec(&command)
-        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+        .map_err(|e| format!("Ошибка выполнения команды mv: {}", e))?;
 
     let mut output = String::new();
-    channel.read_to_string(&mut output)
-        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
     channel.wait_close()
         .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
@@ -184,7 +193,7 @@ pub fn rename_file(connection_info: SshConnectionInfo, old_path: String, new_pat
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
-        return Err("Ошибка переименования".to_string());
+        return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
     Ok("Переименование выполнено успешно".to_string())
