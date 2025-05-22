@@ -341,15 +341,17 @@ pub fn save_file_content(connection_info: SshConnectionInfo, file_path: String, 
             let mut sudo_channel = sess.channel_session()
                 .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
             
-            let sudo_command = format!(
-                "echo '{}' | sudo tee '{}' > /dev/null",
-                escaped_content, escaped_path
+            let final_sudo_command = format!(
+                "echo '{}' | sudo -S sh -c \"echo '{}' > '{}'\"",
+                connection_info.password, escaped_content, escaped_path
             );
             
-            sudo_channel.exec(&sudo_command)
+            sudo_channel.exec(&final_sudo_command)
                 .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
             
+            let mut sudo_output = String::new();
             let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
             if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
             
             sudo_channel.wait_close()
