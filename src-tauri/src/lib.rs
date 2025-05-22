@@ -2,7 +2,6 @@ mod ssh;
 mod listdirectory;
 mod storage;
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
 #[tauri::command]
 fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
@@ -15,7 +14,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             greet,
             ssh::ssh_connect,
-            listdirectory::list_directory
+            listdirectory::list_directory,
+            storage::save_servers,
+            storage::load_servers,
+            storage::delete_server
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

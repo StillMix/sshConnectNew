@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import SSHCard from './SSHCard.vue'
 import RightClickMenu from './RightCLickMenu.vue'
+import { invoke } from '@tauri-apps/api/core'
 
 interface SSHCredential {
   id: number
@@ -11,10 +12,7 @@ interface SSHCredential {
 }
 
 const showForm = ref(false)
-const credentials = reactive<SSHCredential[]>([
-  { id: 1, title: 'Сервер разработки', user: 'dev@192.168.1.10', password: 'dev2024!' },
-  { id: 2, title: 'Prod сервер', user: 'admin@10.0.15.25', password: 'Pr0d$ecure' },
-])
+const credentials = reactive<SSHCredential[]>([])
 
 const newCredential = reactive({
   title: '',
@@ -22,7 +20,6 @@ const newCredential = reactive({
   password: '',
 })
 
-// Состояние для контекстного меню
 const contextMenu = ref({
   isVisible: false,
   x: 0,
@@ -30,7 +27,6 @@ const contextMenu = ref({
   serverId: 0,
 })
 
-// Состояние для формы переименования
 const renameState = ref({
   isVisible: false,
   serverId: 0,
@@ -39,18 +35,44 @@ const renameState = ref({
 
 const emit = defineEmits(['server-select', 'connecting'])
 
+const loadServers = async () => {
+  try {
+    const servers = (await invoke('load_servers')) as SSHCredential[]
+    credentials.splice(0, credentials.length, ...servers)
+  } catch (error) {
+    console.error('Ошибка загрузки серверов:', error)
+    credentials.splice(
+      0,
+      credentials.length,
+      { id: 1, title: 'Сервер разработки', user: 'dev@192.168.1.10', password: 'dev2024!' },
+      { id: 2, title: 'Prod сервер', user: 'admin@10.0.15.25', password: 'Pr0d$ecure' },
+    )
+  }
+}
+
+const saveServers = async () => {
+  try {
+    await invoke('save_servers', { servers: credentials })
+  } catch (error) {
+    console.error('Ошибка сохранения серверов:', error)
+  }
+}
+
 const toggleForm = () => {
   showForm.value = !showForm.value
 }
 
-const addCredential = () => {
+const addCredential = async () => {
   if (newCredential.title && newCredential.user && newCredential.password) {
-    credentials.push({
+    const newServer = {
       id: Date.now(),
       title: newCredential.title,
       user: newCredential.user,
       password: newCredential.password,
-    })
+    }
+
+    credentials.push(newServer)
+    await saveServers()
 
     newCredential.title = ''
     newCredential.user = ''
@@ -61,20 +83,16 @@ const addCredential = () => {
 }
 
 const selectCredential = (credential: SSHCredential) => {
-  // Сообщаем родителю, что начали подключение
   emit('connecting')
 
-  // Имитация подключения
   setTimeout(() => {
-    // Передаем данные наверх через событие
     emit('server-select', credential)
   }, 1000)
 }
 
-// Показать контекстное меню для сервера
 const showContextMenu = (event: MouseEvent, serverId: number) => {
   event.preventDefault()
-  event.stopPropagation() // Останавливаем всплытие события
+  event.stopPropagation()
   contextMenu.value = {
     isVisible: true,
     x: event.clientX,
@@ -83,21 +101,23 @@ const showContextMenu = (event: MouseEvent, serverId: number) => {
   }
 }
 
-// Закрыть контекстное меню
 const closeContextMenu = () => {
   contextMenu.value.isVisible = false
 }
 
-// Обработчик удаления сервера
-const handleDelete = () => {
-  const index = credentials.findIndex((cred) => cred.id === contextMenu.value.serverId)
-  if (index !== -1) {
-    credentials.splice(index, 1)
+const handleDelete = async () => {
+  try {
+    await invoke('delete_server', { serverId: contextMenu.value.serverId })
+    const index = credentials.findIndex((cred) => cred.id === contextMenu.value.serverId)
+    if (index !== -1) {
+      credentials.splice(index, 1)
+    }
+  } catch (error) {
+    console.error('Ошибка удаления сервера:', error)
   }
   closeContextMenu()
 }
 
-// Показать форму переименования
 const handleRename = () => {
   const server = credentials.find((cred) => cred.id === contextMenu.value.serverId)
   if (server) {
@@ -110,22 +130,25 @@ const handleRename = () => {
   closeContextMenu()
 }
 
-// Применить переименование
-const applyRename = () => {
+const applyRename = async () => {
   if (renameState.value.newTitle.trim() === '') return
 
   const server = credentials.find((cred) => cred.id === renameState.value.serverId)
   if (server) {
     server.title = renameState.value.newTitle
+    await saveServers()
   }
 
   renameState.value.isVisible = false
 }
 
-// Отмена переименования
 const cancelRename = () => {
   renameState.value.isVisible = false
 }
+
+onMounted(() => {
+  loadServers()
+})
 </script>
 <template>
   <div class="ssh-container">
@@ -160,7 +183,6 @@ const cancelRename = () => {
       </form>
     </transition>
 
-    <!-- Форма переименования -->
     <transition name="slide-fade">
       <form v-if="renameState.isVisible" class="add-form rename-form" @submit.prevent="applyRename">
         <div class="form-group">
@@ -186,7 +208,6 @@ const cancelRename = () => {
       />
     </transition-group>
 
-    <!-- Контекстное меню -->
     <RightClickMenu
       v-if="contextMenu.isVisible"
       :x="contextMenu.x"
@@ -340,7 +361,6 @@ const cancelRename = () => {
   gap: 16px;
 }
 
-// Анимации
 .slide-fade-enter-active,
 .slide-fade-leave-active {
   transition: all 0.3s ease;
