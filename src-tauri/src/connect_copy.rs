@@ -239,76 +239,59 @@ fn get_directory_contents(session: &Session, dir_path: &str) -> Result<Vec<(Stri
 }
 
 fn create_directory_if_not_exists(session: &Session, connection_info: &SshConnectionInfo, dir_path: &str) -> Result<(), String> {
-    let sftp = session.sftp()
-        .map_err(|e| format!("Ошибка создания SFTP канала: {}", e))?;
+    let mut channel = session.channel_session()
+        .map_err(|e| format!("Ошибка создания канала: {}", e))?;
+
+    let escaped_path = dir_path.replace("'", "'\"'\"'");
+    let command = format!("test -d '{}' || mkdir -p '{}'", escaped_path, escaped_path);
     
-    match sftp.stat(&std::path::Path::new(dir_path)) {
-        Ok(_) => Ok(()),
-        Err(_) => {
-            match sftp.mkdir(&std::path::Path::new(dir_path), 0o755) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    if e.code() == ssh2::ErrorCode::Session(-31) {
-                        let mut channel = session.channel_session()
-                            .map_err(|e| format!("Ошибка создания канала: {}", e))?;
+    channel.exec(&command)
+        .map_err(|e| format!("Ошибка выполнения команды mkdir: {}", e))?;
 
-                        let escaped_path = dir_path.replace("'", "'\"'\"'");
-                        let command = format!("mkdir -p '{}'", escaped_path);
-                        
-                        channel.exec(&command)
-                            .map_err(|e| format!("Ошибка выполнения команды mkdir: {}", e))?;
+    let mut output = String::new();
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
 
-                        let mut output = String::new();
-                        let mut stderr = String::new();
-                        
-                        if let Ok(_) = channel.read_to_string(&mut output) {}
-                        if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
+    channel.wait_close()
+        .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
 
-                        channel.wait_close()
-                            .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
-
-                        let exit_status = channel.exit_status().unwrap_or(-1);
-                        
-                        if exit_status != 0 {
-                            if stderr.contains("Permission denied") || stderr.contains("permission denied") {
-                                let mut sudo_channel = session.channel_session()
-                                    .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
-                                
-                                let sudo_command = format!(
-                                    "echo '{}' | sudo -S mkdir -p '{}'",
-                                    connection_info.password, escaped_path
-                                );
-                                
-                                sudo_channel.exec(&sudo_command)
-                                    .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
-                                
-                                let mut sudo_output = String::new();
-                                let mut sudo_stderr = String::new();
-                                if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
-                                if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
-                                
-                                sudo_channel.wait_close()
-                                    .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
-                                
-                                let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
-                                
-                                if sudo_exit_status != 0 {
-                                    return Err(format!("Ошибка создания директории с sudo: {}", sudo_stderr));
-                                }
-                                
-                                Ok(())
-                            } else {
-                                Err(format!("Команда завершилась с ошибкой: {}", stderr))
-                            }
-                        } else {
-                            Ok(())
-                        }
-                    } else {
-                        Err(format!("Ошибка создания директории: {}", e))
-                    }
-                }
+    let exit_status = channel.exit_status().unwrap_or(-1);
+    
+    if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = session.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S bash -c \"test -d '{}' || mkdir -p '{}'\"",
+                connection_info.password, escaped_path, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка создания директории с sudo: {}", sudo_stderr));
             }
+            
+            Ok(())
+        } else {
+            Err(format!("Команда завершилась с ошибкой: {}", stderr))
         }
+    } else {
+        Ok(())
     }
 }
 
