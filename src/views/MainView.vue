@@ -52,6 +52,7 @@
               v-if="connection.isConnected && connection.showServerInfo"
               :server="connection.server"
               :serverId="connection.id.toString()"
+              :allConnectedServers="getAllConnectedServers()"
               @disconnect="() => handleDisconnect(connection.id)"
               @file-transfer="handleFileTransfer"
             />
@@ -144,14 +145,21 @@ const handleServerSelect = (connectionId: number, server: ServerCredential) => {
     connection.server = server
     connection.isConnected = true
 
-    // Небольшая задержка перед показом ServerInfo
     setTimeout(() => {
       connection.showServerInfo = true
     }, 100)
   }
 
-  // Устанавливаем активное подключение
   activeConnectionId.value = connectionId
+}
+
+const getAllConnectedServers = () => {
+  return connections.value
+    .filter((conn) => conn.isConnected && conn.server)
+    .map((conn) => ({
+      id: conn.id.toString(),
+      server: conn.server,
+    }))
 }
 
 // Обработчик отключения от сервера

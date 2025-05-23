@@ -15,7 +15,24 @@ const props = defineProps<{
     password: string
   } | null
   serverId: string
+  allConnectedServers?: Array<{
+    id: string
+    server: {
+      title: string
+      user: string
+      password: string
+    }
+  }>
 }>()
+
+const getServerInfoById = (serverId: string) => {
+  if (serverId === props.serverId) {
+    return props.server
+  }
+
+  const connectedServer = props.allConnectedServers?.find((conn) => conn.id === serverId)
+  return connectedServer?.server || null
+}
 
 interface FileDragData {
   fileName: string
@@ -367,12 +384,7 @@ const handleDragOver = (event: DragEvent) => {
 const handleDragLeave = () => {
   isDragOver.value = false
 }
-const getServerInfoById = (serverId: string) => {
-  if (serverId === props.serverId) {
-    return props.server
-  }
-  return null
-}
+
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault()
   isDragOver.value = false
