@@ -78,7 +78,6 @@ import SshConnect from '@/components/SSHConnect.vue'
 import SSHconnectings from '@/components/SSHconnectings.vue'
 import { onMounted, onUnmounted } from 'vue'
 
-// Интерфейс для сервера
 interface ServerCredential {
   id?: number
   title: string
@@ -86,7 +85,6 @@ interface ServerCredential {
   password: string
 }
 
-// Интерфейс для подключения
 interface Connection {
   id: number
   server: ServerCredential | null
@@ -94,7 +92,6 @@ interface Connection {
   showServerInfo: boolean
 }
 
-// Интерфейс для трансфера файлов
 interface FileTransfer {
   fileName: string
   isFolder: boolean
@@ -102,11 +99,9 @@ interface FileTransfer {
   destinationServerId: string
 }
 
-// Состояние подключений
 const connections = ref<Connection[]>([])
 const activeConnectionId = ref<number | null>(null)
 
-// Состояние уведомления о трансфере файлов
 const fileTransferNotification = reactive({
   isVisible: false,
   title: '',
@@ -114,31 +109,28 @@ const fileTransferNotification = reactive({
   progress: 0,
 })
 
-// Анимация при загрузке страницы
+const handleContextMenuPrevent = (e: MouseEvent) => {
+  const isMenuElement =
+    (e.target as HTMLElement).closest('.ssh-card') ||
+    (e.target as HTMLElement).closest('.file-item')
+  if (!isMenuElement) {
+    e.preventDefault()
+  }
+}
+
 onMounted(() => {
   const main = document.querySelector('.main')
   if (main) {
     main.classList.add('loaded')
   }
 
-  // Добавляем обработчик для предотвращения стандартного контекстного меню
-  document.addEventListener('contextmenu', (e) => {
-    // Проверяем, что клик не произошел на элементе, который должен иметь контекстное меню
-    const isMenuElement =
-      (e.target as HTMLElement).closest('.ssh-card') ||
-      (e.target as HTMLElement).closest('.file-item')
-    if (!isMenuElement) {
-      e.preventDefault()
-    }
-  })
+  document.addEventListener('contextmenu', handleContextMenuPrevent)
 })
 
-// Не забываем удалить обработчик при размонтировании компонента
 onUnmounted(() => {
-  document.removeEventListener('contextmenu', handleContextMenu)
+  document.removeEventListener('contextmenu', handleContextMenuPrevent)
 })
 
-// Обработчик выбора сервера для определенного подключения
 const handleServerSelect = (connectionId: number, server: ServerCredential) => {
   const connection = connections.value.find((c) => c.id === connectionId)
   if (connection) {
@@ -162,13 +154,11 @@ const getAllConnectedServers = () => {
     }))
 }
 
-// Обработчик отключения от сервера
 const handleDisconnect = (connectionId: number) => {
   const connection = connections.value.find((c) => c.id === connectionId)
   if (connection) {
     connection.showServerInfo = false
 
-    // Задержка перед сбросом состояния подключения
     setTimeout(() => {
       connection.isConnected = false
       connection.server = null
@@ -176,9 +166,7 @@ const handleDisconnect = (connectionId: number) => {
   }
 }
 
-// Обработчик добавления нового подключения
 const handleAddConnection = (connectionData: { id: number; position: number }) => {
-  // Проверяем, что такого подключения еще нет
   if (!connections.value.some((c) => c.id === connectionData.id)) {
     connections.value.push({
       id: connectionData.id,
@@ -189,11 +177,9 @@ const handleAddConnection = (connectionData: { id: number; position: number }) =
   }
 }
 
-// Обработчик трансфера файлов между серверами
 const handleFileTransfer = (transferData: FileTransfer) => {
   console.log('Передача файла между серверами:', transferData)
 
-  // Получаем информацию о серверах
   const sourceConnection = connections.value.find(
     (c) => c.id.toString() === transferData.sourceServerId,
   )
@@ -207,13 +193,11 @@ const handleFileTransfer = (transferData: FileTransfer) => {
     sourceConnection.server &&
     destinationConnection.server
   ) {
-    // Показываем уведомление о начале передачи
     fileTransferNotification.isVisible = true
     fileTransferNotification.title = `Передача файла: ${transferData.fileName}`
     fileTransferNotification.description = `с ${sourceConnection.server.title} на ${destinationConnection.server.title}`
     fileTransferNotification.progress = 0
 
-    // Имитируем процесс передачи файла
     const totalSteps = 10
     let currentStep = 0
 
@@ -224,7 +208,6 @@ const handleFileTransfer = (transferData: FileTransfer) => {
       if (currentStep >= totalSteps) {
         clearInterval(transferInterval)
 
-        // После завершения передачи оставляем уведомление на короткое время
         setTimeout(() => {
           fileTransferNotification.isVisible = false
         }, 2000)
