@@ -368,47 +368,77 @@ const handleDragLeave = () => {
   isDragOver.value = false
 }
 
-const handleDrop = (event: DragEvent) => {
+const handleDrop = async (event: DragEvent) => {
   event.preventDefault()
   isDragOver.value = false
 
-  if (event.dataTransfer) {
-    try {
-      const transferData = JSON.parse(event.dataTransfer.getData('text/plain'))
+  if (!event.dataTransfer || !props.server) return
 
-      if (transferData.serverId !== props.serverId) {
-        console.log('Файл перетащен с одного сервера на другой:', transferData)
+  try {
+    const transferData = JSON.parse(event.dataTransfer.getData('text/plain'))
 
-        transferIndicator.value = {
-          isVisible: true,
-          fileName: transferData.fileName,
-          sourceServerId: transferData.serverId,
-          destinationServerId: props.serverId,
-        }
-
-        setTimeout(() => {
-          emit('fileTransfer', {
-            fileName: transferData.fileName,
-            isFolder: transferData.isFolder,
-            sourceServerId: transferData.serverId,
-            destinationServerId: props.serverId,
-          })
-
-          transferIndicator.value.isVisible = false
-
-          fileSystem.value.push({
-            fileName: transferData.fileName,
-            isFolder: transferData.isFolder,
-            path:
-              currentPath.value +
-              (currentPath.value.endsWith('/') ? '' : '/') +
-              transferData.fileName,
-          })
-        }, 2000)
-      }
-    } catch (error) {
-      console.error('Ошибка при обработке перетаскиваемых данных:', error)
+    if (transferData.serverId === props.serverId) {
+      console.log('Перемещение файла в пределах одного сервера')
+      return
     }
+
+    console.log('Файл перетащен с одного сервера на другой:', transferData)
+
+    transferIndicator.value = {
+      isVisible: true,
+      fileName: transferData.fileName,
+      sourceServerId: transferData.serverId,
+      destinationServerId: props.serverId,
+    }
+
+    const sourceServer = getServerInfoById(transferData.serverId)
+    if (!sourceServer) {
+      throw new Error('Не удалось найти информацию об исходном сервере')
+    }
+
+    const sourceUsername = sourceServer.user.includes('@')
+      ? sourceServer.user.split('@')[0]
+      : sourceServer.user
+
+    const destUsername = props.server.user.includes('@')
+      ? props.server.user.split('@')[0]
+      : props.server.user
+
+    const destinationPath =
+      currentPath.value + (currentPath.value.endsWith('/') ? '' : '/') + transferData.fileName
+
+    const transferRequest = {
+      source_connection: {
+        username: sourceUsername,
+        host: sourceServer.user,
+        password: sourceServer.password,
+      },
+      destination_connection: {
+        username: destUsername,
+        host: props.server.user,
+        password: props.server.password,
+      },
+      file_path: transferData.fullPath || transferData.basePath + transferData.fileName,
+      is_folder: transferData.isFolder,
+      destination_path: destinationPath,
+    }
+
+    await invoke('transfer_file_between_servers', { transferRequest })
+
+    fileSystem.value.push({
+      fileName: transferData.fileName,
+      isFolder: transferData.isFolder,
+      path: destinationPath,
+    })
+
+    transferIndicator.value.isVisible = false
+
+    console.log('Файл успешно передан между серверами')
+  } catch (error) {
+    console.error('Ошибка при передаче файла:', error)
+    transferIndicator.value.isVisible = false
+
+    alert(`Ошибка передачи файла: ${error}`)
   }
 }
 
@@ -474,7 +504,6 @@ const confirmCreate = async (data: { name: string; isFolder: boolean }) => {
   } catch (error) {
     console.error(`Подробная ошибка создания ${data.isFolder ? 'папки' : 'файла'}:`, error)
     console.error('Тип ошибки:', typeof error)
-
 
     alert(`Ошибка создания ${data.isFolder ? 'папки' : 'файла'}: ${error}`)
   }
@@ -543,6 +572,8 @@ const cancelCreate = () => {
           :fileName="file.fileName"
           :isFolder="file.isFolder"
           :serverId="serverId"
+          :fullPath="file.path"
+          :basePath="currentPath"
           @context-menu="showContextMenu"
           @double-click="handleFileDoubleClick"
           @drag-start="handleFileDragStart"

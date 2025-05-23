@@ -3,6 +3,7 @@ mod listdirectory;
 mod storage;
 mod file;
 mod file_operations;
+mod connect_copy;
 
 #[tauri::command]
 fn greet(name: &str) -> String {
@@ -29,7 +30,9 @@ pub fn run() {
             file_operations::create_directory,
             file_operations::delete_file,
             file_operations::delete_directory,
-            file_operations::rename_file
+            file_operations::rename_file,
+            connect_copy::transfer_file_between_servers,
+            
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

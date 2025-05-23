@@ -52,6 +52,28 @@ fn create_ssh_session(connection_info: &SshConnectionInfo) -> Result<Session, St
     Ok(sess)
 }
 
+fn get_file_permissions(session: &Session, file_path: &str) -> Result<u32, String> {
+    let mut channel = session.channel_session()
+        .map_err(|e| format!("Ошибка создания канала: {}", e))?;
+
+    let command = format!("stat -c '%a' '{}'", file_path.replace("'", "'\"'\"'"));
+    
+    channel.exec(&command)
+        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+
+    let mut output = String::new();
+    channel.read_to_string(&mut output)
+        .map_err(|e| format!("Ошибка чтения вывода: {}", e))?;
+
+    channel.wait_close()
+        .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
+
+    let permissions = output.trim().parse::<u32>()
+        .map_err(|_| "Ошибка парсинга прав доступа".to_string())?;
+
+    Ok(permissions)
+}
+
 fn transfer_file_content(
     source_session: &Session,
     dest_session: &Session,
@@ -63,6 +85,8 @@ fn transfer_file_content(
     
     let dest_sftp = dest_session.sftp()
         .map_err(|e| format!("Ошибка создания SFTP канала получателя: {}", e))?;
+
+    let permissions = get_file_permissions(source_session, source_path).unwrap_or(0o644);
 
     let mut source_file = source_sftp.open(&std::path::Path::new(source_path))
         .map_err(|e| format!("Ошибка открытия исходного файла: {}", e))?;
@@ -82,6 +106,14 @@ fn transfer_file_content(
         dest_file.write_all(&buffer[..bytes_read])
             .map_err(|e| format!("Ошибка записи в файл назначения: {}", e))?;
     }
+
+    drop(dest_file);
+    
+    dest_sftp.setstat(&std::path::Path::new(dest_path), &{
+        let mut stat = ssh2::FileStat::new();
+        stat.perm = Some(permissions);
+        stat
+    }).map_err(|e| format!("Ошибка установки прав доступа: {}", e))?;
 
     Ok(())
 }
@@ -129,17 +161,26 @@ fn get_directory_contents(session: &Session, dir_path: &str) -> Result<Vec<(Stri
     Ok(entries)
 }
 
+fn create_directory_if_not_exists(session: &Session, dir_path: &str) -> Result<(), String> {
+    let sftp = session.sftp()
+        .map_err(|e| format!("Ошибка создания SFTP канала: {}", e))?;
+    
+    match sftp.stat(&std::path::Path::new(dir_path)) {
+        Ok(_) => Ok(()),
+        Err(_) => {
+            sftp.mkdir(&std::path::Path::new(dir_path), 0o755)
+                .map_err(|e| format!("Ошибка создания директории: {}", e))
+        }
+    }
+}
+
 fn transfer_directory_recursive(
     source_session: &Session,
     dest_session: &Session,
     source_path: &str,
     dest_path: &str,
 ) -> Result<(), String> {
-    let dest_sftp = dest_session.sftp()
-        .map_err(|e| format!("Ошибка создания SFTP канала: {}", e))?;
-    
-    dest_sftp.mkdir(&std::path::Path::new(dest_path), 0o755)
-        .map_err(|e| format!("Ошибка создания директории: {}", e))?;
+    create_directory_if_not_exists(dest_session, dest_path)?;
 
     let entries = get_directory_contents(source_session, source_path)?;
     

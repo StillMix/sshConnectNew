@@ -2,7 +2,9 @@
 const props = defineProps<{
   fileName: string
   isFolder?: boolean
-  serverId?: string // ID сервера, к которому относится файл
+  serverId?: string
+  fullPath?: string
+  basePath?: string
 }>()
 
 const emit = defineEmits(['contextMenu', 'doubleClick', 'dragStart'])
@@ -20,25 +22,18 @@ const handleDoubleClick = () => {
 
 const handleDragStart = (event: DragEvent) => {
   if (event.dataTransfer) {
-    // Сохраняем информацию о перетаскиваемом файле
-    event.dataTransfer.setData(
-      'text/plain',
-      JSON.stringify({
-        fileName: props.fileName,
-        isFolder: props.isFolder,
-        serverId: props.serverId,
-      }),
-    )
-
-    // Устанавливаем эффект копирования
-    event.dataTransfer.effectAllowed = 'copyMove'
-
-    // Информируем родительский компонент о начале перетаскивания
-    emit('dragStart', {
+    const dragData = {
       fileName: props.fileName,
       isFolder: props.isFolder,
       serverId: props.serverId,
-    })
+      fullPath: props.fullPath,
+      basePath: props.basePath || '/',
+    }
+
+    event.dataTransfer.setData('text/plain', JSON.stringify(dragData))
+    event.dataTransfer.effectAllowed = 'copyMove'
+
+    emit('dragStart', dragData)
   }
 }
 </script>
