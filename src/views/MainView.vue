@@ -158,7 +158,7 @@ const getAllConnectedServers = () => {
     .filter((conn) => conn.isConnected && conn.server)
     .map((conn) => ({
       id: conn.id.toString(),
-      server: conn.server,
+      server: conn.server!,
     }))
 }
 
