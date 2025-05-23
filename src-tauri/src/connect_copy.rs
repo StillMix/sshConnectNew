@@ -77,22 +77,25 @@ fn get_file_permissions(session: &Session, file_path: &str) -> Result<u32, Strin
 fn transfer_file_content(
     source_session: &Session,
     dest_session: &Session,
+    dest_connection: &SshConnectionInfo,
     source_path: &str,
     dest_path: &str,
 ) -> Result<(), String> {
     let source_sftp = source_session.sftp()
         .map_err(|e| format!("Ошибка создания SFTP канала источника: {}", e))?;
-    
-    let dest_sftp = dest_session.sftp()
-        .map_err(|e| format!("Ошибка создания SFTP канала получателя: {}", e))?;
 
     let permissions = get_file_permissions(source_session, source_path).unwrap_or(0o644);
 
     let mut source_file = source_sftp.open(&std::path::Path::new(source_path))
         .map_err(|e| format!("Ошибка открытия исходного файла: {}", e))?;
 
-    let mut dest_file = dest_sftp.create(&std::path::Path::new(dest_path))
-        .map_err(|e| format!("Ошибка создания файла назначения: {}", e))?;
+    let temp_file = format!("/tmp/ssh_transfer_{}", std::process::id());
+    
+    let dest_sftp = dest_session.sftp()
+        .map_err(|e| format!("Ошибка создания SFTP канала получателя: {}", e))?;
+    
+    let mut temp_dest_file = dest_sftp.create(&std::path::Path::new(&temp_file))
+        .map_err(|e| format!("Ошибка создания временного файла: {}", e))?;
 
     let mut buffer = vec![0u8; 8192];
     loop {
@@ -103,22 +106,91 @@ fn transfer_file_content(
             break;
         }
         
-        dest_file.write_all(&buffer[..bytes_read])
-            .map_err(|e| format!("Ошибка записи в файл назначения: {}", e))?;
+        temp_dest_file.write_all(&buffer[..bytes_read])
+            .map_err(|e| format!("Ошибка записи во временный файл: {}", e))?;
     }
 
-    drop(dest_file);
-    
+    drop(temp_dest_file);
+
     let mut channel = dest_session.channel_session()
+        .map_err(|e| format!("Ошибка создания канала: {}", e))?;
+
+    let escaped_dest_path = dest_path.replace("'", "'\"'\"'");
+    let escaped_temp_file = temp_file.replace("'", "'\"'\"'");
+    
+    let command = format!("cp '{}' '{}' && rm '{}'", escaped_temp_file, escaped_dest_path, escaped_temp_file);
+    
+    channel.exec(&command)
+        .map_err(|e| format!("Ошибка выполнения команды: {}", e))?;
+
+    let mut output = String::new();
+    let mut stderr = String::new();
+    
+    if let Ok(_) = channel.read_to_string(&mut output) {}
+    if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
+
+    channel.wait_close()
+        .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
+
+    let exit_status = channel.exit_status().unwrap_or(-1);
+    
+    if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = dest_session.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S cp '{}' '{}'",
+                dest_connection.password, escaped_temp_file, escaped_dest_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка копирования файла с sudo: {}", sudo_stderr));
+            }
+            
+            let mut cleanup_channel = dest_session.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для очистки: {}", e))?;
+            
+            let cleanup_command = format!("rm '{}'", escaped_temp_file);
+            let _ = cleanup_channel.exec(&cleanup_command);
+            let _ = cleanup_channel.wait_close();
+        } else {
+            return Err(format!("Команда завершилась с ошибкой: {}", stderr));
+        }
+    }
+
+    let mut chmod_channel = dest_session.channel_session()
         .map_err(|e| format!("Ошибка создания канала для chmod: {}", e))?;
 
-    let chmod_command = format!("chmod {:o} '{}'", permissions, dest_path.replace("'", "'\"'\"'"));
+    let chmod_command = format!("chmod {:o} '{}'", permissions, escaped_dest_path);
     
-    if let Err(_) = channel.exec(&chmod_command) {
-        // Игнорируем ошибки chmod, так как это не критично
+    if let Err(_) = chmod_channel.exec(&chmod_command) {
+        let mut sudo_chmod_channel = dest_session.channel_session()
+            .map_err(|e| format!("Ошибка создания канала для sudo chmod: {}", e))?;
+        
+        let sudo_chmod_command = format!(
+            "echo '{}' | sudo -S chmod {:o} '{}'",
+            dest_connection.password, permissions, escaped_dest_path
+        );
+        
+        let _ = sudo_chmod_channel.exec(&sudo_chmod_command);
+        let _ = sudo_chmod_channel.wait_close();
+    } else {
+        let _ = chmod_channel.wait_close();
     }
-    
-    let _ = channel.wait_close();
 
     Ok(())
 }
@@ -166,15 +238,76 @@ fn get_directory_contents(session: &Session, dir_path: &str) -> Result<Vec<(Stri
     Ok(entries)
 }
 
-fn create_directory_if_not_exists(session: &Session, dir_path: &str) -> Result<(), String> {
+fn create_directory_if_not_exists(session: &Session, connection_info: &SshConnectionInfo, dir_path: &str) -> Result<(), String> {
     let sftp = session.sftp()
         .map_err(|e| format!("Ошибка создания SFTP канала: {}", e))?;
     
     match sftp.stat(&std::path::Path::new(dir_path)) {
         Ok(_) => Ok(()),
         Err(_) => {
-            sftp.mkdir(&std::path::Path::new(dir_path), 0o755)
-                .map_err(|e| format!("Ошибка создания директории: {}", e))
+            match sftp.mkdir(&std::path::Path::new(dir_path), 0o755) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    if e.code() == ssh2::ErrorCode::Session(-31) {
+                        let mut channel = session.channel_session()
+                            .map_err(|e| format!("Ошибка создания канала: {}", e))?;
+
+                        let escaped_path = dir_path.replace("'", "'\"'\"'");
+                        let command = format!("mkdir -p '{}'", escaped_path);
+                        
+                        channel.exec(&command)
+                            .map_err(|e| format!("Ошибка выполнения команды mkdir: {}", e))?;
+
+                        let mut output = String::new();
+                        let mut stderr = String::new();
+                        
+                        if let Ok(_) = channel.read_to_string(&mut output) {}
+                        if let Ok(_) = channel.stderr().read_to_string(&mut stderr) {}
+
+                        channel.wait_close()
+                            .map_err(|e| format!("Ошибка закрытия канала: {}", e))?;
+
+                        let exit_status = channel.exit_status().unwrap_or(-1);
+                        
+                        if exit_status != 0 {
+                            if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+                                let mut sudo_channel = session.channel_session()
+                                    .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+                                
+                                let sudo_command = format!(
+                                    "echo '{}' | sudo -S mkdir -p '{}'",
+                                    connection_info.password, escaped_path
+                                );
+                                
+                                sudo_channel.exec(&sudo_command)
+                                    .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+                                
+                                let mut sudo_output = String::new();
+                                let mut sudo_stderr = String::new();
+                                if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+                                if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+                                
+                                sudo_channel.wait_close()
+                                    .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+                                
+                                let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+                                
+                                if sudo_exit_status != 0 {
+                                    return Err(format!("Ошибка создания директории с sudo: {}", sudo_stderr));
+                                }
+                                
+                                Ok(())
+                            } else {
+                                Err(format!("Команда завершилась с ошибкой: {}", stderr))
+                            }
+                        } else {
+                            Ok(())
+                        }
+                    } else {
+                        Err(format!("Ошибка создания директории: {}", e))
+                    }
+                }
+            }
         }
     }
 }
@@ -182,10 +315,11 @@ fn create_directory_if_not_exists(session: &Session, dir_path: &str) -> Result<(
 fn transfer_directory_recursive(
     source_session: &Session,
     dest_session: &Session,
+    dest_connection: &SshConnectionInfo,
     source_path: &str,
     dest_path: &str,
 ) -> Result<(), String> {
-    create_directory_if_not_exists(dest_session, dest_path)?;
+    create_directory_if_not_exists(dest_session, dest_connection, dest_path)?;
 
     let entries = get_directory_contents(source_session, source_path)?;
     
@@ -194,9 +328,9 @@ fn transfer_directory_recursive(
         let dest_item_path = format!("{}/{}", dest_path, filename);
         
         if is_folder {
-            transfer_directory_recursive(source_session, dest_session, &source_item_path, &dest_item_path)?;
+            transfer_directory_recursive(source_session, dest_session, dest_connection, &source_item_path, &dest_item_path)?;
         } else {
-            transfer_file_content(source_session, dest_session, &source_item_path, &dest_item_path)?;
+            transfer_file_content(source_session, dest_session, dest_connection, &source_item_path, &dest_item_path)?;
         }
     }
 
@@ -212,6 +346,7 @@ pub fn transfer_file_between_servers(transfer_request: FileTransferRequest) -> R
         transfer_directory_recursive(
             &source_session,
             &dest_session,
+            &transfer_request.destination_connection,
             &transfer_request.file_path,
             &transfer_request.destination_path,
         )?;
@@ -221,6 +356,7 @@ pub fn transfer_file_between_servers(transfer_request: FileTransferRequest) -> R
         transfer_file_content(
             &source_session,
             &dest_session,
+            &transfer_request.destination_connection,
             &transfer_request.file_path,
             &transfer_request.destination_path,
         )?;
