@@ -109,11 +109,16 @@ fn transfer_file_content(
 
     drop(dest_file);
     
-    dest_sftp.setstat(&std::path::Path::new(dest_path), &{
-        let mut stat = ssh2::FileStat::new();
-        stat.perm = Some(permissions);
-        stat
-    }).map_err(|e| format!("Ошибка установки прав доступа: {}", e))?;
+    let mut channel = dest_session.channel_session()
+        .map_err(|e| format!("Ошибка создания канала для chmod: {}", e))?;
+
+    let chmod_command = format!("chmod {:o} '{}'", permissions, dest_path.replace("'", "'\"'\"'"));
+    
+    if let Err(_) = channel.exec(&chmod_command) {
+        // Игнорируем ошибки chmod, так как это не критично
+    }
+    
+    let _ = channel.wait_close();
 
     Ok(())
 }

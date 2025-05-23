@@ -367,7 +367,12 @@ const handleDragOver = (event: DragEvent) => {
 const handleDragLeave = () => {
   isDragOver.value = false
 }
-
+const getServerInfoById = (serverId: string) => {
+  if (serverId === props.serverId) {
+    return props.server
+  }
+  return null
+}
 const handleDrop = async (event: DragEvent) => {
   event.preventDefault()
   isDragOver.value = false
