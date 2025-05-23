@@ -68,6 +68,35 @@ pub fn create_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S touch '{}'",
+                connection_info.password, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка создания файла с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Файл успешно создан с правами администратора".to_string());
+        }
+        
         return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
@@ -99,6 +128,35 @@ pub fn create_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S mkdir -p '{}'",
+                connection_info.password, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка создания папки с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Папка успешно создана с правами администратора".to_string());
+        }
+        
         return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
@@ -130,6 +188,35 @@ pub fn delete_file(connection_info: SshConnectionInfo, file_path: String) -> Res
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S rm '{}'",
+                connection_info.password, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка удаления файла с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Файл успешно удален с правами администратора".to_string());
+        }
+        
         return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
@@ -161,6 +248,35 @@ pub fn delete_directory(connection_info: SshConnectionInfo, dir_path: String) ->
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S rm -rf '{}'",
+                connection_info.password, escaped_path
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка удаления папки с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Папка успешно удалена с правами администратора".to_string());
+        }
+        
         return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
@@ -193,6 +309,35 @@ pub fn rename_file(connection_info: SshConnectionInfo, old_path: String, new_pat
     let exit_status = channel.exit_status().unwrap_or(-1);
     
     if exit_status != 0 {
+        if stderr.contains("Permission denied") || stderr.contains("permission denied") {
+            let mut sudo_channel = sess.channel_session()
+                .map_err(|e| format!("Ошибка создания канала для sudo: {}", e))?;
+            
+            let sudo_command = format!(
+                "echo '{}' | sudo -S mv '{}' '{}'",
+                connection_info.password, escaped_old, escaped_new
+            );
+            
+            sudo_channel.exec(&sudo_command)
+                .map_err(|e| format!("Ошибка выполнения sudo команды: {}", e))?;
+            
+            let mut sudo_output = String::new();
+            let mut sudo_stderr = String::new();
+            if let Ok(_) = sudo_channel.read_to_string(&mut sudo_output) {}
+            if let Ok(_) = sudo_channel.stderr().read_to_string(&mut sudo_stderr) {}
+            
+            sudo_channel.wait_close()
+                .map_err(|e| format!("Ошибка закрытия sudo канала: {}", e))?;
+            
+            let sudo_exit_status = sudo_channel.exit_status().unwrap_or(-1);
+            
+            if sudo_exit_status != 0 {
+                return Err(format!("Ошибка переименования с sudo (код {}): {}", sudo_exit_status, sudo_stderr));
+            }
+            
+            return Ok("Переименование выполнено успешно с правами администратора".to_string());
+        }
+        
         return Err(format!("Команда завершилась с ошибкой (код {}): {}", exit_status, stderr));
     }
 
